@@ -54,12 +54,18 @@ export const obtenerAutosFletes = async (req, res) => {
                 f.fecha_enviado_servidor_logistica BETWEEN ? AND ?
                 ${whereClause}`, 
             [fechaDesde+' 00:00:00', fechaHasta+' 23:59:59', vehiculo]);
-        const resultadoFletesPagados = await pool.query(
+        const [resultadoFletesPagados] = await pool.query(
             `SELECT id_factura_tipo_logistica FROM logistica_fletes_cancelados`
         );
-        const fletesPagadosSet = new Set(resultadoFletesPagados[0].map(row => row.id_factura_tipo_logistica));    
+        const resultadoFletesPagadosSet = new Set(resultadoFletesPagados.map(row => row.id_factura_tipo_logistica));
+        console.log("Fletes pagados:", resultadoFletesPagadosSet); 
+        for (let i = resultadosFletesPorPagar.length - 1; i >= 0; i--) {
+            if (resultadoFletesPagadosSet.has(resultadosFletesPorPagar[i].keycodigo)) {
+                resultadosFletesPorPagar.splice(i, 1);
+            }
+        }   
             
-        res.json(resultados);
+        res.json(resultadosFletesPorPagar);
     } catch (error) {
         console.error("Error al obtener autos fletes:", error);
         res.status(500).json({ error: "Error al obtener autos fletes" });
@@ -69,13 +75,14 @@ export const guardarFletesSeleccionados = async (req, res) => {
     console.log("guardarFletesSeleccionados llamado");
     try {
         const { empresaId, keycodigos, contCuenta,montoFletes } = req.body; 
+        console.log("monto fletes recibido:", montoFletes);
         if (!empresaId || keycodigos.length === 0 || !contCuenta || !montoFletes) {
             console.log("Parámetros inválidos:", req.body);
             return res.status(400).json({ error: "Faltan parámetros: empresaId, fletes, cuenta contable o monto" });
         }
         console.log("apunto de guardar fletes:", keycodigos);
         //guardar en la tabla logistica_fletes_cancelados
-        const valores = keycodigos.map(fleteId => [fleteId, new Date(), contCuenta, montoFletes, new Date(), new Date()]);
+        const valores = keycodigos.map((fleteId, index) => [fleteId, new Date(), contCuenta, montoFletes[index], new Date(), new Date()]);
         console.log("valores a insertar:", valores);
         const sql = `INSERT INTO logistica_fletes_cancelados (id_factura_tipo_logistica, fecha_cancelado,cont_cuenta_id,monto,created_at,updated_at) VALUES ?`;
         await pool.query(sql, [valores]);

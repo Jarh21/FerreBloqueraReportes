@@ -15,15 +15,18 @@ interface FletesProps {
     estatus:string;    
 }
 
+interface FleteSeleccionado {
+    keycodigo: number;
+    total: number;
+}
+
 const Fletes: React.FC = () => {
     const [fletes, setFletes] = React.useState<FletesProps[]>([]);
-    const [montoFletes, setMontoFletes] = React.useState<number>(0);
-    const [loading, setLoading] = React.useState<boolean>(true);
     const [error, setError] = React.useState<string | null>(null);   
     const [vehiculos, setVehiculos] = React.useState<any[]>([]);
     const [contCuenta, setContCuenta] = React.useState<any[]>([]);
     const [selectedCuenta, setSelectedCuenta] = React.useState<number | null>(null);
-    const [fletesSeleccionados, setFletesSeleccionados] = React.useState<number[]>([]);
+    const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);
     const [formBusquedaFletes, setFormBusquedaFletes] = React.useState<{
         fechaDesde: string;
         fechaHasta: string;
@@ -40,11 +43,10 @@ const Fletes: React.FC = () => {
     const handleCheckboxChange = (keycodigo: number, total: number) => {
         const totalNum = Number(total) || 0;
         setFletesSeleccionados(prev => {
-            const yaSeleccionado = prev.includes(keycodigo);
-            setMontoFletes(montoPrev => (yaSeleccionado ? montoPrev - totalNum : montoPrev + totalNum));
+            const yaSeleccionado = prev.some(f => f.keycodigo === keycodigo);
             return yaSeleccionado
-                ? prev.filter(id => id !== keycodigo)
-                : [...prev, keycodigo];
+                ? prev.filter(f => f.keycodigo !== keycodigo)
+                : [...prev, { keycodigo, total: totalNum }];
         });
     };
 
@@ -55,15 +57,17 @@ const Fletes: React.FC = () => {
                 return;
             }
             try {
+                const keycodigos = fletesSeleccionados.map(f => f.keycodigo);
+                const montoFletes = fletesSeleccionados.map(f => f.total);
                 await axios.post(buildApiUrl('/logistica/fletes/seleccionados'), {
                     empresaId: empresaActual.id,
-                    keycodigos: fletesSeleccionados,
-                    montoFletes: montoFletes,
+                    keycodigos,
+                    montoFletes,
                     contCuenta: selectedCuenta
                 }, { withCredentials: true });
                 alert("Fletes enviados correctamente");
                 setFletesSeleccionados([]);
-                setMontoFletes(0);
+                handleBuscarFletesVehiculos(); // Refrescar la lista de fletes
             } catch (error) {
                 alert("Error al enviar fletes seleccionados");
             }
@@ -73,6 +77,7 @@ const Fletes: React.FC = () => {
     React.useEffect(() => {
         handlelistarVehiculos();
         obtenerContableCuenta();
+      
     }, []);
 
     const obtenerContableCuenta = async () => {
@@ -259,7 +264,7 @@ const Fletes: React.FC = () => {
                                 <td className="border border-slate-300 px-4 py-2 text-sm text-slate-700">
                                     <input
                                         type="checkbox"
-                                        checked={fletesSeleccionados.includes(flete.keycodigo)}
+                                        checked={fletesSeleccionados.some(f => f.keycodigo === flete.keycodigo)}
                                         onChange={() => handleCheckboxChange(flete.keycodigo, flete.total)}
                                     />
                                 </td>

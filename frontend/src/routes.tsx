@@ -6,10 +6,24 @@ import Login from "./pages/Login"
 import Register from "./pages/Register"
 import Dashboard from "./pages/Dashboard"
 import Inicio from "./pages/dashboard/Inicio"
-import Finanzas from "./pages/dashboard/Finanzas"
-import Reportes from "./pages/dashboard/Reportes"
-import Configuracion from "./pages/dashboard/Configuracion"
+
 import Logistica from "./pages/dashboard/logistica/Fletes"
+
+import Proveedores from "./pages/dashboard/reportes/Proveedores"
+import Ventas from "./pages/dashboard/reportes/Ventas"
+import Saldos from "./pages/dashboard/reportes/Saldos"
+import Ejemplo from "./pages/dashboard/reportes/Ejemplo"
+
+import Usuarios from "./pages/dashboard/configuracion/Usuarios"
+import Empresas from "./pages/dashboard/configuracion/Empresas"
+import UsuarioNuevo from "./pages/dashboard/configuracion/UsuarioNuevo"
+import EditarUsusario from "./pages/dashboard/configuracion/UsuarioEditar"
+
+import Arqueo from "./pages/dashboard/finanzas/Arqueo"
+import Calendar from "./pages/dashboard/finanzas/Calendar"
+import InformeEfectivo from "./pages/dashboard/finanzas/InformeEfectivo"
+import BuscarFlujoEfectivo from "./pages/dashboard/finanzas/BuscarFlujoEfectivo"
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -25,10 +39,27 @@ export default function AppRoutes() {
         }
       >
         <Route index element={<Inicio />} />
-        <Route path="finanzas/*" element={<Finanzas />} />
-        <Route path="logistica/*" element={<Logistica />} />        
-        <Route path="reportes/*" element={<Reportes />} />
-        <Route path="configuracion/*" element={<Configuracion />} />
+        /***finanzas */
+        <Route path="finanzas/" element={<Arqueo />} /> 
+        <Route path="finanzas/calendar" element={<Calendar />} />
+        <Route path="finanzas/arqueo/:date/:empresaId" element={<Arqueo />} />
+        <Route path="finanzas/arqueo" element={<Arqueo />} />
+        <Route path="finanzas/informe-efectivo" element={<InformeEfectivo />} />
+        <Route path="finanzas/buscar-informe-efectivo" element={<BuscarFlujoEfectivo />} />
+        /***reportes */
+        <Route path="reportes/proveedores" element={<Proveedores />} />
+        <Route path="reportes/ventas" element={<Ventas />} />
+        <Route path="reportes/saldos" element={<Saldos />} />
+        <Route path="reportes/ejemplo" element={<Ejemplo />} />
+        <Route path="reportes/" element={<Proveedores />} />
+        /***configuracion */
+        <Route path="configuracion/usuarios" element={<Usuarios />} />
+        <Route path="configuracion/empresas" element={<Empresas />} />
+        <Route path="configuracion/UsuarioNuevo" element={<UsuarioNuevo />} />
+        <Route path="configuracion/UsuarioEditar/:id" element={<EditarUsusario />} />
+        /***logistica */       
+        <Route path="logistica/*" element={<Logistica />} />       
+        
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
