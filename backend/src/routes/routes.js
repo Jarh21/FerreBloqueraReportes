@@ -32,7 +32,7 @@ router.put("/empresas/:id", authMiddleware, adminMiddleware, actualizarEmpresa)
 // Finanzas
 router.post("/finanzas/", authMiddleware, crearFinanza)
 router.get("/finanzas/lista-asesores/:empresaId/:fecha",authMiddleware,listaAsesores)
-router.get("/finanzas/tipos-pago-detalle", authMiddleware, obtenerModosPagoDetalle)
+router.get("/finanzas/tipos-pago-detalle",  obtenerModosPagoDetalle)
 router.get("/finanzas/denominaciones/:tipo_moneda", authMiddleware, obtenerDenominaciones)
 router.post("/finanzas/cuadre-denominacion", authMiddleware, guardarDenominacionesCuadre)
 router.post("/finanzas/cuadre-arqueo-ingreso", authMiddleware, guardarCuadreArqueoIngreso)

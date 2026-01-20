@@ -7,6 +7,27 @@ export const obtenerAutos = async (req,res)=>{
         if (!empresaId) {
             return res.status(400).json({ error: "Faltan parámetros: empresaId" });
         }
+        const sql=`SELECT id as keycodigo,CONCAT_WS(' ', 
+        logistica_vehiculos.marca, 
+        logistica_vehiculos.modelo, 
+        logistica_vehiculos.placa
+        
+    ) AS vehiculo FROM logistica_vehiculos where empresa_id=?`;
+        const [resultados] = await pool.query(sql, [empresaId]);
+        res.json(resultados);
+    } catch (error) {
+        console.error("Error al obtener autos:", error);
+        res.status(500).json({ error: "Error al obtener autos" });
+    }
+}
+
+export const obtenerAutosSiace = async (req,res)=>{
+    try {
+
+        const {empresaId} = req.params;       
+        if (!empresaId) {
+            return res.status(400).json({ error: "Faltan parámetros: empresaId" });
+        }
         const sql=`SELECT keycodigo,CONCAT_WS(' ', 
         logistica_vehiculo.marca, 
         logistica_vehiculo.modelo, 
@@ -93,11 +114,11 @@ export const guardarFletesSeleccionados = async (req, res) => {
 
         //insertamos el asiento contable
         const asientoSql = ` INSERT INTO cont_registro 
-        (fecha_de_operacion, comprobante, codcuenta, codconcepto, descripcion, 
+        (empresa_id, fecha_de_operacion, comprobante, codcuenta, codconcepto, descripcion, 
          debito, credito, monto_moneda_cuenta_debito, monto_moneda_cuenta_credito, 
          fecha, codusua, usuario, equipo, registrado) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, NOW())`;
-        const asientoValores = [new Date(), nuevoComprobante, contCuenta, 25,'PAGO DE FLETES BASE DE DATOS LOCAL', 0, sumaMontoFletes,0,sumaMontoFletes,9,'SISTEMA-REPORTES','SERVER'];
+        const asientoValores = [empresaId,new Date(), nuevoComprobante, contCuenta, 25,'PAGO DE FLETES BASE DE DATOS LOCAL', 0, sumaMontoFletes,0,sumaMontoFletes,9,'SISTEMA-REPORTES','SERVER'];
         await pool.query(asientoSql, asientoValores);
 
         //insertamos los fletes cancelados

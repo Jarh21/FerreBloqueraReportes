@@ -155,7 +155,7 @@ const Fletes: React.FC = () => {
                             />
                     </div>
                     <div className="space-y-1 lg:col-span-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Vehiculos</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Vehiculos {vehiculos.length > 0 ? "":<button className="bg-yellow-400 text-black px-2 py-1 rounded">+Agregar</button>}</label>
                         <select
                             onChange={(e) => setFormBusquedaFletes(prev => ({ ...prev, vehiculo: Number(e.target.value) }))}
                             className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all"
