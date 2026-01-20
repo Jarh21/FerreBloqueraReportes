@@ -1131,3 +1131,44 @@ export const buscarFlujoEfectivoSiacePorFecha = async (req, res) => {
     res.status(500).json({ error: 'Error al listar flujo de efectivo SIACE' });
   }
 }
+
+export const nuevoComprobanteFlujoEfectivoSiace = async(empresaId)=> {
+  // 1. Buscar el último comprobante del flujo de efectivo
+    const consultaSQL = `SELECT comprobante FROM cont_registro ORDER BY comprobante DESC LIMIT 1`;
+    const ultimoComprobanteSQL = await ejecutarConsultaEnEmpresaPorId(empresaId, consultaSQL, []);
+
+    // 3. Generar nuevo comprobante
+    let nuevoComprobante;
+    
+    if (ultimoComprobanteSQL.length > 0 && ultimoComprobanteSQL[0].comprobante) {
+      const ultimoComprobante = ultimoComprobanteSQL[0].comprobante;
+      
+      // Validar que tenga 10 caracteres
+      if (ultimoComprobante.length !== 10) {
+        throw new Error(`Formato de comprobante inválido. Se esperaban 10 caracteres, se recibieron ${ultimoComprobante.length}`);
+      }
+      
+      // Convertir a número y sumar 1
+      const ultimoNumero = parseInt(ultimoComprobante, 10);
+      
+      if (isNaN(ultimoNumero)) {
+        return res.status(500).json({ 
+          error: `No se pudo convertir el comprobante a número: "${ultimoComprobante}"` 
+        });
+      }
+      
+      const nuevoNumero = ultimoNumero + 1;
+      nuevoComprobante = nuevoNumero.toString().padStart(10, '0');
+      
+      // Validar que no exceda 10 dígitos
+      if (nuevoComprobante.length > 10) {
+        return res.status(500).json({ 
+          error: `El número de comprobante excede 10 dígitos después del incremento: ${nuevoNumero}` 
+        });
+      }
+    } else {
+      // Si no hay comprobantes previos
+      nuevoComprobante = '0000000001';
+    }
+    return nuevoComprobante;
+}

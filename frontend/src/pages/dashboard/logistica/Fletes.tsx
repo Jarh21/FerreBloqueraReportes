@@ -1,8 +1,8 @@
 import axios from "axios";
 import React from "react";
-import Select from 'react-select';
 import { useAuth } from "../../../context/AuthContext";
 import { buildApiUrl } from '../../../config/api';
+import SelectCuenta from "../../../components/selectoresContables/SelectCuenta";
 interface FletesProps {
     keycodigo:number;
     fecha: string;
@@ -24,7 +24,6 @@ const Fletes: React.FC = () => {
     const [fletes, setFletes] = React.useState<FletesProps[]>([]);
     const [error, setError] = React.useState<string | null>(null);   
     const [vehiculos, setVehiculos] = React.useState<any[]>([]);
-    const [contCuenta, setContCuenta] = React.useState<any[]>([]);
     const [selectedCuenta, setSelectedCuenta] = React.useState<number | null>(null);
     const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);
     const [formBusquedaFletes, setFormBusquedaFletes] = React.useState<{
@@ -76,19 +75,8 @@ const Fletes: React.FC = () => {
 
     React.useEffect(() => {
         handlelistarVehiculos();
-        obtenerContableCuenta();
       
     }, []);
-
-    const obtenerContableCuenta = async () => {
-        try {
-            const resultado = await axios.get(`${buildApiUrl('/finanzas/contable-cuenta/')}${empresaActual?.id}`, { withCredentials: true });
-            setContCuenta(resultado.data);
-        } catch (error) {
-            console.error("Error al obtener cuenta contable:", error);
-            setError("Error al obtener cuenta contable");
-        }
-    };
 
     const handleBuscarFletesVehiculos = async () => {
         // Lógica para buscar vehículos
@@ -126,14 +114,6 @@ const Fletes: React.FC = () => {
             setError("Error al listar vehículos");
         }
     };
-    // Opciones para el Select de cuentas contables
-    const options = [
-        { value: '', label: 'Seleccione cuenta', isDisabled: true },
-        ...contCuenta.map((cuenta: any) => ({
-            value: cuenta.keycodigo,
-            label: cuenta.nombre
-        }))
-    ];
     return (
         <div className="p-6 bg-white rounded-xl shadow-lg border border-slate-200">
             {/* Encabezado con Badge de Estado */}
@@ -202,24 +182,10 @@ const Fletes: React.FC = () => {
                     </div>
                            
                 </div>
+
                     <div className="mt-6  flex justify-end">
-                        <Select 
-                            styles={{
-                                control: (base) => ({
-                                ...base,
-                                backgroundColor: '#f8fafc', // bg-slate-50
-                                borderColor: '#e2e8f0',     // border-slate-200
-                                borderRadius: '0.5rem',     // rounded-lg
-                                padding: '2px',
-                                }),
-                            }}
-                            getOptionValue={(opt: any) => String(opt.value)}
-                            placeholder="Seleccione cuenta a debitar"
-                            onChange={(opt: any) => setSelectedCuenta(opt?.value ?? null)}                       
-                            options={options}
-                            value={options.find((opt: any) => opt.value === selectedCuenta) || null}
-                            className="text-sm px-2"
-                        />
+                        <SelectCuenta value={selectedCuenta} onChange={setSelectedCuenta} />
+                                
                         <button
                             type="button"
                             className="bg-blue-600 text-white px-8 py-2.5 rounded-lg font-bold hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all flex items-center gap-2 active:scale-95"
