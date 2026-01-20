@@ -71,6 +71,11 @@ router.get("/reportes/ventas/:empresaId", authMiddleware, obtenerVentas)
 router.get("/reportes/saldos/:empresaId", authMiddleware, obtenerSaldos)
 router.get("/reportes/total-saldo/:empresaId",  totalSaldoEmpresa)
 
+// Pagos - Solicitudes
+import { obtenerSolicitudes, crearSolicitud } from "../modules/pagos/pagos.controller.js"
+router.get("/pagos/solicitudes", authMiddleware, obtenerSolicitudes)
+router.post("/pagos/solicitudes", authMiddleware, crearSolicitud)
+
 // Usuarios
 router.get("/usuarios", authMiddleware, adminMiddleware, obtenerUsuarios)
 router.post("/usuarios", authMiddleware, adminMiddleware, crearUsuario)

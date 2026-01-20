@@ -65,6 +65,21 @@ export default function Sidebar({ open }: SidebarProps) {
           },
         ]
       : []),
+       ...(validarModulo("Solicitudes")
+      ? [
+          {
+            label: "Solicitudes",
+            href: "#",
+            icon: "🧾",
+            submenu: [
+              { label: "Crear solicitud", href: "/dashboard/solicitudes/crear" },
+              { label: "Pagar a personas/instituciones", href: "/dashboard/solicitudes/pagar" },
+              { label: "Estado de solicitudes", href: "/dashboard/solicitudes/estado" },
+              
+            ],
+          },
+        ]
+      : []),
     ...(validarModulo("Configuracion")
       ? [
           {
