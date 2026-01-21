@@ -29,7 +29,7 @@ export async function crearSolicitud(req, res) {
       concepto = null,
       cuenta_contable_id = null,
       beneficiario_nombre = null,
-      beneficiario_rif = null,
+      beneficiario_id = null,
       beneficiario_banco = null,
       beneficiario_telefono = null,
       beneficiario_cuenta = null,
@@ -40,7 +40,7 @@ export async function crearSolicitud(req, res) {
       banco_origen = null,
     } = payload;
 
-    const sql = `INSERT INTO solicitudes_pagos (empresa_id, usuario_id, tipo_pago, concepto, cuenta_contable_id, beneficiario_nombre, beneficiario_rif, beneficiario_banco, beneficiario_telefono, beneficiario_cuenta, monto_usd, tasa, monto_bs, referencia, banco_origen, creado_en, estatus)
+    const sql = `INSERT INTO solicitudes_pagos (empresa_id, usuario_id, tipo_pago, concepto, cuenta_contable_id, beneficiario_nombre, beneficiario_id, beneficiario_banco, beneficiario_telefono, beneficiario_cuenta, monto_usd, tasa, monto_bs, referencia, banco_origen, creado_en, estatus)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'pendiente')`;
 
     const params = [
@@ -50,7 +50,7 @@ export async function crearSolicitud(req, res) {
       concepto,
       cuenta_contable_id,
       beneficiario_nombre,
-      beneficiario_rif,
+      beneficiario_id,
       beneficiario_banco,
       beneficiario_telefono,
       beneficiario_cuenta,

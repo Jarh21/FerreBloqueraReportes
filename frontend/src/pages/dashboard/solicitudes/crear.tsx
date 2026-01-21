@@ -1,23 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from "../../../context/AuthContext"; // Ajusta la ruta según tu estructura
-import { buildApiUrl } from '../../../config/api'; // Ajusta la ruta según tu estructura
+import { useAuth } from "../../../context/AuthContext";
+import { buildApiUrl } from '../../../config/api';
+import SelectorBancos from '../../../components/solicitudes/SelectSolicitudes/SelectorBancos';
+// Asegúrate de que esta ruta sea la correcta hacia tu componente Selector
+import SelectorTiposPago from '../../../components/solicitudes/SelectSolicitudes/SelectorTipoPago';
 import axios from 'axios';
 
-// --- SUBCOMPONENTE: MODAL DE CREACIÓN (Estilizado con Tailwind) ---
+// ==========================================
+// 1. CONSTANTES GLOBALES (Configuración)
+// ==========================================
+const TIPOS_PAGO = {
+  BINANCE: "BINANCE",
+  TRANSFERENCIA: "TRANSFERENCIA",
+  PAGO_MOVIL: "PAGO MOVIL",
+  ZELLE: "ZELLE"
+};
+
+// Generamos el array para el filtro del Selector automáticamente
+const LISTA_OPCIONES_PERMITIDAS = Object.values(TIPOS_PAGO);
+
+
+// ==========================================
+// 2. SUBCOMPONENTE: MODAL DE CREACIÓN
+// ==========================================
 const ModalSolicitudPago = ({ isOpen, onClose, onSave, empresaId }: any) => {
   const [formData, setFormData] = useState({
     solicitante: '',
     tipo_pago: '',
     concepto: '',
     cuenta_contable_id: '',
+    // Datos Beneficiario
     beneficiario_nombre: '',
     beneficiario_rif: '',
     beneficiario_banco: '',
     beneficiario_telefono: '',
     beneficiario_cuenta: '',
+    beneficiario_email: '', // Nuevo campo necesario para Zelle/Binance
+    // Datos Pago
     monto_usd: 0,
     tasa: 0,
     monto_bs: 0,
+    // Datos Procesamiento
     referencia: '',
     banco_origen: '',
     comprobante: null as File | null
@@ -42,20 +65,102 @@ const ModalSolicitudPago = ({ isOpen, onClose, onSave, empresaId }: any) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Construir objeto plano (se enviará JSON al backend)
-    const payload: any = { ...formData };
-    // Remover campo de archivo (no se envía como base64 por ahora)
-    if (payload.comprobante) delete payload.comprobante;
-    if (empresaId) payload.empresa_id = empresaId;
+    const payload = new FormData();
+    Object.keys(formData).forEach(key => {
+        // @ts-ignore
+        payload.append(key, formData[key]);
+    });
+    if(empresaId) payload.append('empresa_id', empresaId);
 
     onSave(payload);
   };
 
   if (!isOpen) return null;
 
-  // Estilos de inputs reutilizados de tu componente original
+  // Estilos reutilizables
   const inputClass = "w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all";
   const labelClass = "text-[10px] font-bold text-slate-400 uppercase ml-1";
+
+  // --- LÓGICA DINÁMICA DE CAMPOS ---
+  const renderCamposDinamicos = () => {
+    switch (formData.tipo_pago) {
+        
+      case TIPOS_PAGO.ZELLE:
+        return (
+          <>
+            <div className="space-y-1 md:col-span-2">
+                <label className={labelClass}>Correo Zelle</label>
+                <input name="beneficiario_email" value={formData.beneficiario_email} onChange={handleChange} className={inputClass} placeholder="ejemplo@correo.com" />
+            </div>
+            <div className="space-y-1">
+                <label className={labelClass}>Titular de la cuenta</label>
+                <input name="beneficiario_nombre" value={formData.beneficiario_nombre} onChange={handleChange} className={inputClass} />
+            </div>
+          </>
+        );
+
+      case TIPOS_PAGO.BINANCE:
+        return (
+          <>
+            <div className="space-y-1 md:col-span-2">
+                <label className={labelClass}>Binance ID / Email</label>
+                <input name="beneficiario_email" value={formData.beneficiario_email} onChange={handleChange} className={inputClass} placeholder="ID o Correo" />
+            </div>
+             <div className="space-y-1">
+                <label className={labelClass}>Nombre Usuario</label>
+                <input name="beneficiario_nombre" value={formData.beneficiario_nombre} onChange={handleChange} className={inputClass} />
+            </div>
+          </>
+        );
+
+      case TIPOS_PAGO.PAGO_MOVIL:
+  return (
+    <>
+      <div className="space-y-1">
+          <label className={labelClass}>Banco Destino</label>
+          {/* REEMPLAZO AQUÍ: */}
+          <SelectorBancos
+              name="beneficiario_banco"
+              value={formData.beneficiario_banco}
+              onChange={handleChange}
+              className={inputClass}
+              // Si tu API usa "name" en vez de "nombre", cámbialo aquí:
+              labelKey="nombre" 
+              valueKey="nombre"
+          />
+      </div>
+      {/* ... resto de campos (Cédula, Teléfono) ... */}
+    </>
+  );
+
+case TIPOS_PAGO.TRANSFERENCIA:
+  return (
+    <>
+       {/* ... campo Beneficiario ... */}
+       {/* ... campo RIF ... */}
+      
+      <div className="space-y-1">
+          <label className={labelClass}>Banco Destino</label>
+          {/* REEMPLAZO AQUÍ: */}
+          <SelectorBancos
+              name="beneficiario_banco"
+              value={formData.beneficiario_banco}
+              onChange={handleChange}
+              className={inputClass}
+          />
+      </div>
+      {/* ... campo Cuenta ... */}
+    </>
+  );
+
+      default:
+        return (
+            <div className="md:col-span-3 py-6 text-center text-slate-400 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
+                <p className="text-xs font-medium">⬆ Seleccione un tipo de pago arriba para llenar los datos del beneficiario.</p>
+            </div>
+        );
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
@@ -73,15 +178,22 @@ const ModalSolicitudPago = ({ isOpen, onClose, onSave, empresaId }: any) => {
                 <label className={labelClass}>Solicitante</label>
                 <input name="solicitante" value={formData.solicitante} onChange={handleChange} required className={inputClass} placeholder="Nombre del solicitante" />
             </div>
+            
             <div className="space-y-1">
                 <label className={labelClass}>Tipo de Pago</label>
-                <select name="tipo_pago" value={formData.tipo_pago} onChange={handleChange} className={inputClass}>
-                    <option value="">Seleccionar...</option>
-                    <option value="transferencia">Transferencia</option>
-                    <option value="pago_movil">Pago Móvil</option>
-                    <option value="zelle">Zelle</option>
-                </select>
+                <SelectorTiposPago 
+                    name="tipo_pago"
+                    value={formData.tipo_pago}
+                    onChange={handleChange}
+                    className={inputClass}
+                    // Configuración API
+                    labelKey="nombre"
+                    valueKey="nombre"
+                    // Filtro Global
+                    allowedOptions={LISTA_OPCIONES_PERMITIDAS}
+                />
             </div>
+
             <div className="space-y-1">
                 <label className={labelClass}>Cuenta Contable</label>
                 <select name="cuenta_contable_id" value={formData.cuenta_contable_id} onChange={handleChange} className={inputClass}>
@@ -95,28 +207,14 @@ const ModalSolicitudPago = ({ isOpen, onClose, onSave, empresaId }: any) => {
                 <input name="concepto" value={formData.concepto} onChange={handleChange} required className={inputClass} placeholder="Descripción del pago" />
             </div>
 
-            {/* Sección Beneficiario */}
-            <div className="md:col-span-3 border-t border-slate-100 mt-2 pt-4"><h4 className="text-sm font-bold text-slate-700">Datos del Beneficiario</h4></div>
-            
-            <div className="space-y-1 md:col-span-2">
-                <label className={labelClass}>Nombre / Razón Social</label>
-                <input name="beneficiario_nombre" value={formData.beneficiario_nombre} onChange={handleChange} required className={inputClass} />
-            </div>
-            <div className="space-y-1">
-                <label className={labelClass}>RIF / CI</label>
-                <input name="beneficiario_rif" value={formData.beneficiario_rif} onChange={handleChange} className={inputClass} />
-            </div>
-            <div className="space-y-1">
-                <label className={labelClass}>Banco Destino</label>
-                <input name="beneficiario_banco" value={formData.beneficiario_banco} onChange={handleChange} className={inputClass} />
-            </div>
-            <div className="space-y-1">
-                <label className={labelClass}>Teléfono</label>
-                <input name="beneficiario_telefono" value={formData.beneficiario_telefono} onChange={handleChange} className={inputClass} />
-            </div>
-            <div className="space-y-1">
-                <label className={labelClass}>Número de Cuenta</label>
-                <input name="beneficiario_cuenta" value={formData.beneficiario_cuenta} onChange={handleChange} className={inputClass} />
+            {/* Sección Beneficiario (DINÁMICA) */}
+            <div className="md:col-span-3 border-t border-slate-100 mt-2 pt-4">
+                <h4 className="text-sm font-bold text-slate-700 mb-3">
+                    Datos del Beneficiario {formData.tipo_pago ? `(${formData.tipo_pago})` : ''}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {renderCamposDinamicos()}
+                </div>
             </div>
 
             {/* Sección Montos */}
@@ -161,7 +259,9 @@ const ModalSolicitudPago = ({ isOpen, onClose, onSave, empresaId }: any) => {
 };
 
 
-// --- COMPONENTE PRINCIPAL ---
+// ==========================================
+// 3. COMPONENTE PRINCIPAL (Sin cambios mayores)
+// ==========================================
 const GestionPagos: React.FC = () => {
   const { empresaActual } = useAuth();
   
@@ -181,7 +281,6 @@ const GestionPagos: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      // Asumiendo que existe un endpoint GET para listar
       const response = await axios.get(buildApiUrl(`/pagos/solicitudes?empresa_id=${empresaActual?.id}`), {
         withCredentials: true
       });
@@ -198,12 +297,12 @@ const GestionPagos: React.FC = () => {
   const handleCrearSolicitud = async (formData: FormData) => {
     try {
         setLoading(true);
-      // Enviar JSON al endpoint (por ahora no manejamos upload de archivos)
-      await axios.post(buildApiUrl('/pagos/solicitudes'), formData, {
-        withCredentials: true
-      });
+        await axios.post(buildApiUrl('/pagos/solicitudes'), formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            withCredentials: true
+        });
         setIsModalOpen(false);
-        obtenerSolicitudes(); // Recargar tabla
+        obtenerSolicitudes(); 
     } catch (err: any) {
         const msg = err?.response?.data?.error || err.message || 'Error al guardar solicitud';
         setError(msg);
@@ -218,7 +317,6 @@ const GestionPagos: React.FC = () => {
     return fecha.toLocaleDateString('es-VE');
   }
 
-  // Helper para color de estatus
   const getStatusStyle = (status: string) => {
     switch(status?.toLowerCase()) {
         case 'completado': return 'bg-green-100 text-green-700 border-green-200';

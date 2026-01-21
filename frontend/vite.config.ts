@@ -10,5 +10,15 @@ export default defineConfig({
     strictPort: true,
     // Configuración para desarrollo
     cors: true,
+    proxy: {
+      // Redirige peticiones que comiencen con /api al backend
+      // Evita problemas de CORS en desarrollo.
+      '/api': {
+        target: 'http://10.10.7.100:4000',
+        changeOrigin: true,
+        secure: false,
+        ws: false,
+      },
+    },
   },
 })
