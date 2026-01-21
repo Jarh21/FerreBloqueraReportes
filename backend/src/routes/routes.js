@@ -1,5 +1,5 @@
 // Logística
-import { obtenerAutosFletes, obtenerAutos, guardarFletesSeleccionados } from "../modules/logistica/logistica.controller.js"
+import { obtenerAutosFletes, obtenerAutos, guardarFletesSeleccionados,obtenerAutosSiace,guardarVehiculo } from "../modules/logistica/logistica.controller.js"
 
 import express from "express"
 // Auth
@@ -13,6 +13,8 @@ import { obtenerContContable,obtenerFinanzas,crearFinanza,listaAsesores,guardarC
 import { obtenerEstadoProveedores, obtenerVentas, obtenerSaldos, totalSaldoEmpresa } from "../modules/reportes/reportes.controller.js"
 // Usuarios
 import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, editarUsuarios, obtenerRoles} from "../modules/usuarios/usuarios.controller.js"
+//solicitudes
+import { ObtenerEntidades} from "../modules/solicitudes/entidades.controller.js"
 
 const router = express.Router()
 
@@ -87,5 +89,10 @@ router.get("/usuarios/roles/list", authMiddleware, adminMiddleware, obtenerRoles
 // Logística
 router.post("/logistica/fletes", authMiddleware, obtenerAutosFletes)
 router.get("/logistica/vehiculos/list/:empresaId", authMiddleware, obtenerAutos)
+router.get("/logistica/vehiculos-siace/list/:empresaId",  obtenerAutosSiace)
 router.post("/logistica/fletes/seleccionados", authMiddleware, guardarFletesSeleccionados)
+router.post("/logistica/fletes/guardar-vehiculo", authMiddleware, guardarVehiculo)
+
+// Solicitudes - Entidades
+router.get("/solicitudes/entidades",  ObtenerEntidades)
 export default router

@@ -11,7 +11,7 @@ const app = express()
 //listado de dominios permitidos para CORS    
 const allowedOrigins = [  
   process.env.FRONTEND_URL,
-  "10.10.3.6:3000",
+  "10.10.3.6:3010",
   "10.10.3.6:80",
   // Puedes agregar más orígenes aquí
 ];
