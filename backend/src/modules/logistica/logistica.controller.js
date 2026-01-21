@@ -12,7 +12,7 @@ export const obtenerAutos = async (req,res)=>{
         logistica_vehiculos.modelo, 
         logistica_vehiculos.placa
         
-    ) AS vehiculo FROM logistica_vehiculos where empresa_id=?`;
+    ) AS vehiculo,is_vehiculo_externo FROM logistica_vehiculos where empresa_id=?`;
         const [resultados] = await pool.query(sql, [empresaId]);
         res.json(resultados);
     } catch (error) {
@@ -131,6 +131,20 @@ export const guardarFletesSeleccionados = async (req, res) => {
     }
 }
 
-
-
-
+export const guardarVehiculo = async (req, res) => {
+    console.log("guardarVehiculo llamado backend", req.body);
+    try {
+        const { empresaId, marca, modelo, placa, observacion, asociadoSiace, localForaneo } = req.body;  
+        if (!empresaId || !marca || !modelo || !placa || !observacion ) {
+            return res.status(400).json({ error: "Faltan parámetros: empresaId, marca, modelo, placa, observacion, asociadoSiace o localForaneo" });
+        }
+        const sql=`INSERT INTO logistica_vehiculos 
+        (empresa_id, marca, modelo, placa, observacion, asociado_siace_id, is_vehiculo_externo, created_at, updated_at) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`;
+        await pool.query(sql, [empresaId, marca, modelo, placa, observacion, asociadoSiace, localForaneo]);
+        res.json({ mensaje: "Vehículo guardado correctamente" });
+    } catch (error) {
+        console.error("Error al guardar vehículo:", error);
+        res.status(500).json({ error: "Error al guardar vehículo" });
+    }
+}
