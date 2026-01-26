@@ -1,267 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from "../../../context/AuthContext";
 import { buildApiUrl } from '../../../config/api';
-import SelectorBancos from '../../../components/solicitudes/SelectSolicitudes/SelectorBancos';
-// Asegúrate de que esta ruta sea la correcta hacia tu componente Selector
-import SelectorTiposPago from '../../../components/solicitudes/SelectSolicitudes/SelectorTipoPago';
 import axios from 'axios';
 
-// ==========================================
-// 1. CONSTANTES GLOBALES (Configuración)
-// ==========================================
-const TIPOS_PAGO = {
-  BINANCE: "BINANCE",
-  TRANSFERENCIA: "TRANSFERENCIA",
-  PAGO_MOVIL: "PAGO MOVIL",
-  ZELLE: "ZELLE"
-};
+// IMPORTAMOS EL MODAL DESDE SU NUEVA UBICACIÓN
+import ModalSolicitudPago from '../../../components/solicitudes/Modales/ModalSolicitudPago';
 
-// Generamos el array para el filtro del Selector automáticamente
-const LISTA_OPCIONES_PERMITIDAS = Object.values(TIPOS_PAGO);
-
-
-// ==========================================
-// 2. SUBCOMPONENTE: MODAL DE CREACIÓN
-// ==========================================
-const ModalSolicitudPago = ({ isOpen, onClose, onSave, empresaId }: any) => {
-  const [formData, setFormData] = useState({
-    solicitante: '',
-    tipo_pago: '',
-    concepto: '',
-    cuenta_contable_id: '',
-    // Datos Beneficiario
-    beneficiario_nombre: '',
-    beneficiario_rif: '',
-    beneficiario_banco: '',
-    beneficiario_telefono: '',
-    beneficiario_cuenta: '',
-    beneficiario_email: '', // Nuevo campo necesario para Zelle/Binance
-    // Datos Pago
-    monto_usd: 0,
-    tasa: 0,
-    monto_bs: 0,
-    // Datos Procesamiento
-    referencia: '',
-    banco_origen: '',
-    comprobante: null as File | null
-  });
-
-  // Cálculo automático de Bs
-  useEffect(() => {
-    const bs = (parseFloat(formData.monto_usd as any) || 0) * (parseFloat(formData.tasa as any) || 0);
-    setFormData(prev => ({ ...prev, monto_bs: parseFloat(bs.toFixed(2)) }));
-  }, [formData.monto_usd, formData.tasa]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFormData(prev => ({ ...prev, comprobante: e.target.files![0] }));
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload = new FormData();
-    Object.keys(formData).forEach(key => {
-        // @ts-ignore
-        payload.append(key, formData[key]);
-    });
-    if(empresaId) payload.append('empresa_id', empresaId);
-
-    onSave(payload);
-  };
-
-  if (!isOpen) return null;
-
-  // Estilos reutilizables
-  const inputClass = "w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all";
-  const labelClass = "text-[10px] font-bold text-slate-400 uppercase ml-1";
-
-  // --- LÓGICA DINÁMICA DE CAMPOS ---
-  const renderCamposDinamicos = () => {
-    switch (formData.tipo_pago) {
-        
-      case TIPOS_PAGO.ZELLE:
-        return (
-          <>
-            <div className="space-y-1 md:col-span-2">
-                <label className={labelClass}>Correo Zelle</label>
-                <input name="beneficiario_email" value={formData.beneficiario_email} onChange={handleChange} className={inputClass} placeholder="ejemplo@correo.com" />
-            </div>
-            <div className="space-y-1">
-                <label className={labelClass}>Titular de la cuenta</label>
-                <input name="beneficiario_nombre" value={formData.beneficiario_nombre} onChange={handleChange} className={inputClass} />
-            </div>
-          </>
-        );
-
-      case TIPOS_PAGO.BINANCE:
-        return (
-          <>
-            <div className="space-y-1 md:col-span-2">
-                <label className={labelClass}>Binance ID / Email</label>
-                <input name="beneficiario_email" value={formData.beneficiario_email} onChange={handleChange} className={inputClass} placeholder="ID o Correo" />
-            </div>
-             <div className="space-y-1">
-                <label className={labelClass}>Nombre Usuario</label>
-                <input name="beneficiario_nombre" value={formData.beneficiario_nombre} onChange={handleChange} className={inputClass} />
-            </div>
-          </>
-        );
-
-      case TIPOS_PAGO.PAGO_MOVIL:
-  return (
-    <>
-      <div className="space-y-1">
-          <label className={labelClass}>Banco Destino</label>
-          {/* REEMPLAZO AQUÍ: */}
-          <SelectorBancos
-              name="beneficiario_banco"
-              value={formData.beneficiario_banco}
-              onChange={handleChange}
-              className={inputClass}
-              // Si tu API usa "name" en vez de "nombre", cámbialo aquí:
-              labelKey="nombre" 
-              valueKey="nombre"
-          />
-      </div>
-      {/* ... resto de campos (Cédula, Teléfono) ... */}
-    </>
-  );
-
-case TIPOS_PAGO.TRANSFERENCIA:
-  return (
-    <>
-       {/* ... campo Beneficiario ... */}
-       {/* ... campo RIF ... */}
-      
-      <div className="space-y-1">
-          <label className={labelClass}>Banco Destino</label>
-          {/* REEMPLAZO AQUÍ: */}
-          <SelectorBancos
-              name="beneficiario_banco"
-              value={formData.beneficiario_banco}
-              onChange={handleChange}
-              className={inputClass}
-          />
-      </div>
-      {/* ... campo Cuenta ... */}
-    </>
-  );
-
-      default:
-        return (
-            <div className="md:col-span-3 py-6 text-center text-slate-400 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-                <p className="text-xs font-medium">⬆ Seleccione un tipo de pago arriba para llenar los datos del beneficiario.</p>
-            </div>
-        );
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-slate-200">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-            <h3 className="text-xl font-black text-slate-800">Nueva <span className="text-red-700">Solicitud</span></h3>
-            <button onClick={onClose} className="text-slate-400 hover:text-red-700 transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {/* Sección General */}
-            <div className="space-y-1">
-                <label className={labelClass}>Solicitante</label>
-                <input name="solicitante" value={formData.solicitante} onChange={handleChange} required className={inputClass} placeholder="Nombre del solicitante" />
-            </div>
-            
-            <div className="space-y-1">
-                <label className={labelClass}>Tipo de Pago</label>
-                <SelectorTiposPago 
-                    name="tipo_pago"
-                    value={formData.tipo_pago}
-                    onChange={handleChange}
-                    className={inputClass}
-                    // Configuración API
-                    labelKey="nombre"
-                    valueKey="nombre"
-                    // Filtro Global
-                    allowedOptions={LISTA_OPCIONES_PERMITIDAS}
-                />
-            </div>
-
-            <div className="space-y-1">
-                <label className={labelClass}>Cuenta Contable</label>
-                <select name="cuenta_contable_id" value={formData.cuenta_contable_id} onChange={handleChange} className={inputClass}>
-                    <option value="">Seleccionar...</option>
-                    <option value="1">Caja Chica</option>
-                    <option value="2">Banco Nacional</option>
-                </select>
-            </div>
-            <div className="space-y-1 md:col-span-3">
-                <label className={labelClass}>Concepto</label>
-                <input name="concepto" value={formData.concepto} onChange={handleChange} required className={inputClass} placeholder="Descripción del pago" />
-            </div>
-
-            {/* Sección Beneficiario (DINÁMICA) */}
-            <div className="md:col-span-3 border-t border-slate-100 mt-2 pt-4">
-                <h4 className="text-sm font-bold text-slate-700 mb-3">
-                    Datos del Beneficiario {formData.tipo_pago ? `(${formData.tipo_pago})` : ''}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    {renderCamposDinamicos()}
-                </div>
-            </div>
-
-            {/* Sección Montos */}
-            <div className="md:col-span-3 border-t border-slate-100 mt-2 pt-4"><h4 className="text-sm font-bold text-slate-700">Detalles del Pago</h4></div>
-
-            <div className="space-y-1">
-                <label className={labelClass}>Monto USD</label>
-                <input type="number" step="0.01" name="monto_usd" value={formData.monto_usd} onChange={handleChange} required className={inputClass} />
-            </div>
-            <div className="space-y-1">
-                <label className={labelClass}>Tasa</label>
-                <input type="number" step="0.01" name="tasa" value={formData.tasa} onChange={handleChange} required className={inputClass} />
-            </div>
-            <div className="space-y-1">
-                <label className={labelClass}>Monto BS (Calculado)</label>
-                <input type="number" value={formData.monto_bs} readOnly className={`${inputClass} bg-slate-100 cursor-not-allowed`} />
-            </div>
-
-            {/* Sección Procesamiento */}
-            <div className="space-y-1">
-                <label className={labelClass}>Referencia</label>
-                <input name="referencia" value={formData.referencia} onChange={handleChange} className={inputClass} />
-            </div>
-             <div className="space-y-1">
-                <label className={labelClass}>Banco Origen</label>
-                <input name="banco_origen" value={formData.banco_origen} onChange={handleChange} className={inputClass} />
-            </div>
-             <div className="space-y-1">
-                <label className={labelClass}>Comprobante (Imagen/PDF)</label>
-                <input type="file" onChange={handleFileChange} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-red-50 file:text-red-700 hover:file:bg-red-100"/>
-            </div>
-
-            {/* Footer Modal */}
-            <div className="md:col-span-3 flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                <button type="button" onClick={onClose} className="px-6 py-2 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
-                <button type="submit" className="bg-red-700 text-white px-8 py-2 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 transition-all active:scale-95">Guardar Solicitud</button>
-            </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-
-// ==========================================
-// 3. COMPONENTE PRINCIPAL (Sin cambios mayores)
-// ==========================================
 const GestionPagos: React.FC = () => {
   const { empresaActual } = useAuth();
   
@@ -270,7 +14,6 @@ const GestionPagos: React.FC = () => {
   const [solicitudes, setSolicitudes] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // Efecto para cargar datos iniciales
   useEffect(() => {
     if (empresaActual?.id) {
         obtenerSolicitudes();
@@ -297,6 +40,7 @@ const GestionPagos: React.FC = () => {
   const handleCrearSolicitud = async (formData: FormData) => {
     try {
         setLoading(true);
+        // La lógica de limpieza ya ocurrió dentro del Modal, aquí solo enviamos
         await axios.post(buildApiUrl('/pagos/solicitudes'), formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
             withCredentials: true
@@ -328,7 +72,7 @@ const GestionPagos: React.FC = () => {
   return (
     <div className="p-6 bg-white rounded-xl shadow-lg border border-slate-200">
       
-      {/* Header y Botón Principal */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">
@@ -345,7 +89,7 @@ const GestionPagos: React.FC = () => {
         </button>
       </div>
 
-      {/* Mensajes de Estado */}
+      {/* Loading & Error */}
       {loading && (
         <div className="flex items-center justify-center py-10 gap-3 text-slate-500">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-700"></div>
@@ -360,7 +104,7 @@ const GestionPagos: React.FC = () => {
         </div>
       )}
 
-      {/* Tabla de Resultados */}
+      {/* Tabla */}
       {solicitudes.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
           <table className="min-w-full text-xs text-left">
@@ -418,16 +162,16 @@ const GestionPagos: React.FC = () => {
       ) : (
         !loading && (
             <div className="py-20 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-            <div className="text-slate-300 mb-3">
-                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            </div>
-            <p className="text-slate-500 font-medium">No hay solicitudes de pago registradas</p>
-            <button onClick={() => setIsModalOpen(true)} className="text-red-700 text-sm font-bold hover:underline mt-2">Crear la primera solicitud</button>
+                <div className="text-slate-300 mb-3">
+                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </div>
+                <p className="text-slate-500 font-medium">No hay solicitudes de pago registradas</p>
+                <button onClick={() => setIsModalOpen(true)} className="text-red-700 text-sm font-bold hover:underline mt-2">Crear la primera solicitud</button>
             </div>
         )
       )}
 
-      {/* Renderizado del Modal */}
+      {/* Renderizado del Modal Importado */}
       <ModalSolicitudPago 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
