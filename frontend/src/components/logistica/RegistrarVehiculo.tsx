@@ -56,7 +56,7 @@ const RegistrarVehiculo: React.FC<RegistrarVehiculoProps> = ({ onVehiculoGuardad
 
     const obtenerVehiculosRegistrados = async () => {
         try{
-            const response = await axios.get(buildApiUrl(`/logistica/vehiculos/list/${empresaActual?.id}`),{ withCredentials: true });
+            const response = await axios.get(buildApiUrl(`/logistica/vehiculos/list/${empresaActual?.id}/0,1`),{ withCredentials: true });
             setVehiculos(response.data);
         }catch(error){
             console.error("error al obtener vehiculos registrados: ", error);

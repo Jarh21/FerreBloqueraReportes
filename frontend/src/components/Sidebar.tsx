@@ -45,9 +45,12 @@ export default function Sidebar({ open }: SidebarProps) {
     ...(validarModulo("Logistica") ? [
       {
         label: "Logistica",
-        href:"/dashboard/logistica/fletes",
+        href:"#",
         icon: "🚛",
-        submenu: [],
+        submenu: [
+          { label: "Pago Fletes", href: "/dashboard/logistica/fletes" },
+          { label: "Reporte Fletes Pagados", href: "/dashboard/logistica/reporte-fletes",icon: "🚛" },
+        ],
       }
     ] : [] ),  
     ...(validarModulo("Reportes")

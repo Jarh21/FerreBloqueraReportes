@@ -1,5 +1,5 @@
 // Logística
-import { obtenerAutosFletes, obtenerAutos, guardarFletesSeleccionados,obtenerAutosSiace,guardarVehiculo } from "../modules/logistica/logistica.controller.js"
+import { obtenerAutosFletes, obtenerAutos,obtenerAutosQueRealizaronFletes,guardarFletesSeleccionados,obtenerAutosSiace,guardarVehiculo,obtenerTotalFletesPorVehiculo, obtenerDetalleFacturasPorVehiculo } from "../modules/logistica/logistica.controller.js"
 
 import express from "express"
 // Auth
@@ -88,10 +88,13 @@ router.get("/usuarios/roles/list", authMiddleware, adminMiddleware, obtenerRoles
 
 // Logística
 router.post("/logistica/fletes", authMiddleware, obtenerAutosFletes)
-router.get("/logistica/vehiculos/list/:empresaId", authMiddleware, obtenerAutos)
+router.get("/logistica/vehiculos/list/:empresaId/:es_vehiculo_externo", authMiddleware, obtenerAutos)
+router.post("/logistica/vehiculos/list-quehizo-flete", authMiddleware, obtenerAutosQueRealizaronFletes)
 router.get("/logistica/vehiculos-siace/list/:empresaId",  obtenerAutosSiace)
 router.post("/logistica/fletes/seleccionados", authMiddleware, guardarFletesSeleccionados)
 router.post("/logistica/fletes/guardar-vehiculo", authMiddleware, guardarVehiculo)
+router.post("/logistica/fletes/total-por-vehiculo", authMiddleware, obtenerTotalFletesPorVehiculo);
+router.post("/logistica/fletes/detalle-por-vehiculo", authMiddleware, obtenerDetalleFacturasPorVehiculo);
 
 // Solicitudes - Entidades
 router.get("/solicitudes/entidades",  ObtenerEntidades)
