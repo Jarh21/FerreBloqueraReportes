@@ -49,7 +49,7 @@ export default function Sidebar({ open }: SidebarProps) {
         icon: "🚛",
         submenu: [
           { label: "Pago Fletes", href: "/dashboard/logistica/fletes" },
-          { label: "Reporte Fletes Pagados", href: "/dashboard/logistica/reporte-fletes",icon: "🚛" },
+          { label: "Estadisticas Fletes", href: "/dashboard/logistica/reporte-fletes",icon: "🚛" },
         ],
       }
     ] : [] ),  

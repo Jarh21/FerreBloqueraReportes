@@ -69,8 +69,21 @@ export const obtenerAutosQueRealizaronFletes = async (req, res) => {
             WHERE 
                 f.fecha_enviado_servidor_logistica BETWEEN ? AND ?            
             AND f.status_codigo = 4 group BY f.ultimo_cod_logistica_vehiculo_asignado`;
-        const resultados = await ejecutarConsultaEnEmpresaPorId(empresaId, sql, [fechaDesde+' 00:00:00', fechaHasta+' 23:59:59']);
-        res.json(resultados);
+        const resultadosVehiculosFleteados = await ejecutarConsultaEnEmpresaPorId(empresaId, sql, [fechaDesde+' 00:00:00', fechaHasta+' 23:59:59']);
+       
+        //buscamos los vehiculos en la base de datos local que son foraneos
+        const [vehiculosForaneos] = await pool.query(`SELECT asociado_siace_id as keycodigo FROM logistica_vehiculos where empresa_id=? and is_vehiculo_externo=0`, [empresaId]);
+        
+        //se crea un objeto con los keycodigo sin repeticion de los vehiculos foraneos
+        const vehiculosForaneosSet = new Set(vehiculosForaneos.map(v => v.keycodigo));
+        
+        //filtramos los vehiculos que no son foraneos y los eliminamos de la lista de resultados
+        for (let i = resultadosVehiculosFleteados.length - 1; i >= 0; i--) {
+            if (vehiculosForaneosSet.has(resultadosVehiculosFleteados[i].keycodigo)) {
+                resultadosVehiculosFleteados.splice(i, 1);
+            }
+        }
+        res.json(resultadosVehiculosFleteados);
     } catch (error) {
         console.error("Error al obtener autos que realizaron fletes:", error);
         res.status(500).json({ error: "Error al obtener autos que realizaron fletes" });
@@ -194,6 +207,7 @@ export const guardarVehiculo = async (req, res) => {
 }
 
 export const obtenerTotalFletesPorVehiculo = async (req, res) => {
+    //estadistivas de fletes por vehiculo
     try {
         const { empresaId, fechaDesde, fechaHasta, vehiculos } = req.body;
         //filtramos segun la cantidad de vehiculos seleccionados
@@ -220,7 +234,7 @@ export const obtenerTotalFletesPorVehiculo = async (req, res) => {
                 ROUND(AVG(f.total), 2) AS promedio_por_factura,
                 COUNT(DISTINCT f.receptor_nombre) AS clientes_distintos_atendidos,
                 -- Nueva columna de porcentaje
-                ROUND((SUM(f.total) * 100 / SUM(SUM(f.total)) OVER()), 2) AS porcentaje_del_total
+                ROUND((SUM(f.total) * 100 / SUM(SUM(f.total)) OVER()),2) AS porcentaje_del_total
             FROM factura_tipo_logistica f
             WHERE 
                 1=1                
@@ -242,16 +256,24 @@ export const obtenerTotalFletesPorVehiculo = async (req, res) => {
 }
 export const obtenerDetalleFacturasPorVehiculo = async (req, res) => {
     try {
-        const { empresaId, vehiculoId, fechaDesde, fechaHasta } = req.body;
-        if (!empresaId || !vehiculoId) {
-            return res.status(400).json({ error: "Faltan parámetros: empresaId o vehiculoId" });
+        // Ahora recibimos un array de vehiculoIds (IDs o Placas)
+        const { empresaId, vehiculoIds, fechaDesde, fechaHasta } = req.body;
+
+        if (!empresaId || !vehiculoIds || vehiculoIds.length === 0) {
+            return res.status(400).json({ error: "Faltan parámetros" });
         }
-        const sql = `SELECT
-                    f.keycodigo,	
-                    f.registrado AS fecha,
-                    l.documento,  
+
+        const sql = `
+        select * from (
+        SELECT
                     d.codprod,
                     d.nombre AS producto,
+                    f.ultimo_logistica_vehiculo_placa_asignado AS placa,
+                    CONCAT_WS(' ',                     
+                        f.ultimo_logistica_vehiculo_marca_asignado, 
+                        f.ultimo_logistica_vehiculo_modelo_asignado, 
+                        f.ultimo_logistica_vehiculo_placa_asignado
+                    ) AS vehiculo,
                     SUM(d.cantidad) AS cantidad
                 FROM factura_tipo_logistica f
                 INNER JOIN logistica_factura l ON f.keycodigo = l.cod_factura_tipo_logistica
@@ -259,14 +281,44 @@ export const obtenerDetalleFacturasPorVehiculo = async (req, res) => {
                 WHERE 
                     f.fecha_enviado_servidor_logistica BETWEEN ? AND ?                    
                     AND f.status_codigo = 4
-                    AND f.ultimo_cod_logistica_vehiculo_asignado = ?
+                    AND f.ultimo_cod_logistica_vehiculo_asignado IN (?)
+                
                 GROUP BY
-                    d.codprod`;
-        const resultados = await ejecutarConsultaEnEmpresaPorId(empresaId, sql, [fechaDesde+' 00:00:00', fechaHasta+' 23:59:59', vehiculoId]);
-        res.json(resultados);
+                    d.codprod, f.ultimo_logistica_vehiculo_placa_asignado
+        ) datos
+        ORDER BY datos.producto ASC`;
+
+        const resultados = await ejecutarConsultaEnEmpresaPorId(empresaId, sql, [
+            fechaDesde + ' 00:00:00', 
+            fechaHasta + ' 23:59:59', 
+            vehiculoIds // Asegúrate que tu función soporte arrays para el IN
+        ]);
+
+        // --- PROCESAMIENTO PARA PIVOTAR ---
+        const matrizMap = {};
+        const columnasMap = new Map();
+
+        resultados.forEach(row => {
+            const { codprod, producto, placa, vehiculo, cantidad } = row;
+            if (!columnasMap.has(placa)) {
+                columnasMap.set(placa, { placa, vehiculo });
+            }
+
+            if (!matrizMap[codprod]) {
+                matrizMap[codprod] = { codprod, producto, cantidades: {} };
+            }
+            matrizMap[codprod].cantidades[placa] = Number(cantidad);
+        });
+
+        res.json({
+            columnas: Array.from(columnasMap.values()), // Esto servirá para los headers en React
+            datos: Object.values(matrizMap)
+                .sort((a, b) => String(a.producto).localeCompare(String(b.producto)))
+        });
+
     } catch (error) {
-        console.error("Error al obtener detalle de facturas por vehículo:", error);
-        res.status(500).json({ error: "Error al obtener detalle de facturas por vehículo" });
+        console.error("Error:", error);
+        res.status(500).json({ error: "Error interno" });
     }
 }
 

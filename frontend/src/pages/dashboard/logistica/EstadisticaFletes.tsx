@@ -11,17 +11,27 @@ type DetalleProducto = {
 };
 
 type DetalleVehiculo = {
-    vehiculoId: number;
-    vehiculo: string;
-    items: DetalleProducto[];
+    columnas: Array<{
+        placa: string;
+        vehiculo: string;
+    }>;
+    datos: Array<{
+        codprod: number | string;
+        producto: string;
+        cantidades: Record<string, number>;
+    }>;
 };
 
-const ReporteFletes: React.FC = () => {
+const EstadisticaFletes: React.FC = () => {
     const { empresaActual } = useAuth();
     const [error, setError] = React.useState<string | null>(null);
     const [vehiculos, setVehiculos] = React.useState<any[]>([]);
     const [totalFletes, setTotalFletes] = React.useState<any[]>([]);
-    const [detalleVehiculos, setDetalleVehiculos] = React.useState<DetalleVehiculo[]>([]);
+    const [detalleVehiculos, setDetalleVehiculos] = React.useState<DetalleVehiculo>({
+        columnas: [],
+        datos: [],
+    });
+    const [filtroProductoDetalle, setFiltroProductoDetalle] = React.useState("");
     const [loadingDetalle, setLoadingDetalle] = React.useState(false);
     const [formBusquedaFletes, setFormBusquedaFletes] = React.useState<{
         fechaDesde: string;
@@ -77,37 +87,31 @@ const ReporteFletes: React.FC = () => {
             setError(null);
 
             if (!resultado.data || resultado.data.length === 0) {
-                setDetalleVehiculos([]);
+                setDetalleVehiculos({ columnas: [], datos: [] });
                 return;
             }
 
             setLoadingDetalle(true);
             try {
-                const detalle = await Promise.all(
-                    resultado.data.map(async (tflete: any) => {
-                        const vehiculoId = Number(tflete.ultimo_cod_logistica_vehiculo_asignado);
-                        const resp = await axios.post(
-                            buildApiUrl(`/logistica/fletes/detalle-por-vehiculo`),
-                            {
-                                empresaId: empresaActual?.id,
-                                vehiculoId,
-                                fechaDesde: formBusquedaFletes.fechaDesde,
-                                fechaHasta: formBusquedaFletes.fechaHasta,
-                            },
-                            { withCredentials: true }
-                        );
-                        return {
-                            vehiculoId,
-                            vehiculo: tflete.vehiculo,
-                            items: resp.data ?? [],
-                        } as DetalleVehiculo;
-                    })
+                const vehiculoIds = resultado.data
+                    .map((tflete: any) => Number(tflete.ultimo_cod_logistica_vehiculo_asignado))
+                    .filter((id: number) => Number.isInteger(id) && id > 0);
+
+                const resp = await axios.post(
+                    buildApiUrl(`/logistica/fletes/detalle-por-vehiculo`),
+                    {
+                        empresaId: empresaActual?.id,
+                        vehiculoIds,
+                        fechaDesde: formBusquedaFletes.fechaDesde,
+                        fechaHasta: formBusquedaFletes.fechaHasta,
+                    },
+                    { withCredentials: true }
                 );
-                setDetalleVehiculos(detalle);
+                setDetalleVehiculos(resp.data ?? { columnas: [], datos: [] });
             } catch (error) {
                 console.error("Error al obtener detalle por vehículo:", error);
                 setError("Error al obtener detalle de productos por vehículo");
-                setDetalleVehiculos([]);
+                setDetalleVehiculos({ columnas: [], datos: [] });
             } finally {
                 setLoadingDetalle(false);
             }
@@ -155,6 +159,19 @@ const ReporteFletes: React.FC = () => {
           }),
           []
         );
+    const totalPorPlaca = React.useMemo(() => {
+        const totales: Record<string, number> = {};
+        detalleVehiculos.columnas.forEach((col) => {
+            totales[col.placa] = 0;
+        });
+        detalleVehiculos.datos.forEach((item) => {
+            detalleVehiculos.columnas.forEach((col) => {
+                const cant = item.cantidades[col.placa] || 0;
+                totales[col.placa] += cant;
+            });
+        });
+        return totales;
+    }, [detalleVehiculos.columnas, detalleVehiculos.datos]);
     return(
         <div className="p-6 bg-white rounded-xl shadow-lg border border-slate-200">
             {/* Encabezado Principal */}
@@ -162,7 +179,10 @@ const ReporteFletes: React.FC = () => {
                 <div>
                 <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
                     <span className="w-2 h-8 bg-red-700 rounded-full"></span>
-                    Reporte Fletes Pagados
+                    <svg className="w-6 h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3v18h18M7 13h3v5H7v-5zm5-6h3v11h-3V7zm5 3h3v8h-3v-8z" />
+                    </svg>
+                    Estadistica Fletes
                 </h2>
                 <p className="text-slate-500 text-sm">Consulta, filtrado y despacho de fletes vehiculares</p>
                 </div>
@@ -250,7 +270,7 @@ const ReporteFletes: React.FC = () => {
                             <th className="px-4 py-3 font-bold uppercase text-[10px] tracking-widest border-r border-slate-700">Monto Total</th>                            
                             <th className="px-4 py-3 font-bold uppercase text-[10px] tracking-widest border-r border-slate-700">Promedio x Factura</th>
                             <th className="px-4 py-3 font-bold uppercase text-[10px] tracking-widest border-r border-slate-700">Clientes</th>
-                            <th className="px-4 py-3 font-bold uppercase text-[10px] tracking-widest border-r border-slate-700">% Total</th>
+                            <th className="px-4 py-3 font-bold uppercase text-[10px] tracking-widest border-r border-slate-700">% Monto Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -270,56 +290,81 @@ const ReporteFletes: React.FC = () => {
                 )}
             </div>
             {/* Tabla de productos por cada vehiculo */}
-            <div className="overflow-hidden rounded-xl border border-slate-200 shadow-sm mt-6">
-                {loadingDetalle ? (
-                    <div className="text-center text-slate-400 py-10 bg-slate-50/50 italic">
-                        Cargando detalle de productos...
+            <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm mt-6">
+    <table className="w-full text-sm text-left">
+        <thead>
+            <tr className="bg-slate-800 text-slate-200">
+                <th className="px-4 py-3 font-bold uppercase text-[10px] border-r border-slate-700">Código</th>
+                <th className="px-4 py-3 font-bold uppercase text-[10px] border-r border-slate-700">
+                    <div className="flex flex-col gap-1">
+                        <span>Producto</span>
+                        <input
+                            type="text"
+                            value={filtroProductoDetalle}
+                            onChange={(e) => setFiltroProductoDetalle(e.target.value)}
+                            placeholder="Filtrar"
+                            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-normal uppercase text-slate-700 placeholder-slate-400 focus:border-red-700 focus:outline-none focus:ring-2 focus:ring-red-700/30"
+                        />
                     </div>
-                ) : detalleVehiculos.length === 0 ? (
-                    <div className="text-center text-slate-400 py-10 bg-slate-50/50 italic">
-                        No hay detalle de productos para mostrar.
-                    </div>
-                ) : (
-                    <div className="divide-y divide-slate-200">
-                        {detalleVehiculos.map((detalle) => (
-                            <div key={detalle.vehiculoId} className="p-4">
-                                <div className="flex items-center justify-between mb-3 mt-4">
-                                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
-                                        Vehículo: {detalle.vehiculoId} - {detalle.vehiculo}
-                                    </h3>
-                                    <span className="text-xs text-slate-400">
-                                        {detalle.items.length} productos
-                                    </span>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm text-left">
-                                        <thead>
-                                            <tr className="bg-slate-100 text-slate-600">
-                                                <th className="px-3 py-2 font-bold uppercase text-[10px] tracking-widest border-r border-slate-200">Código</th>
-                                                <th className="px-3 py-2 font-bold uppercase text-[10px] tracking-widest border-r border-slate-200">Producto</th>
-                                                <th className="px-3 py-2 font-bold uppercase text-[10px] tracking-widest">Cantidad</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {detalle.items.map((item) => (
-                                                <tr key={`${detalle.vehiculoId}-${item.codprod}`}>
-                                                    <td className="px-3 py-2 text-slate-600 border-r border-slate-100">{item.codprod}</td>
-                                                    <td className="px-3 py-2 text-slate-600 border-r border-slate-100">{item.producto}</td>
-                                                    <td className="px-3 py-2 text-slate-600">{Number(item.cantidad).toFixed(2)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>  
+                </th>
+                
+                {/* Generamos columnas dinámicas por cada placa */}
+                {detalleVehiculos.columnas?.map((col) => (
+                    <th
+                        key={col.placa}
+                        title={col.vehiculo}
+                        className="px-4 py-3 font-bold uppercase text-[10px] text-center border-r border-slate-700"
+                    >
+                        <div className="flex flex-col items-center">
+                            <span>Placa: {col.placa}</span>
+                            <span className="text-[9px] font-normal text-slate-300">
+                                Total unidades: {Number(totalPorPlaca[col.placa] ?? 0).toFixed(2)}
+                            </span>
+                        </div>
+                    </th>
+                ))}
+                <th className="px-4 py-3 font-bold uppercase text-[10px] bg-slate-900">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {detalleVehiculos.datos
+                ?.filter((item) =>
+                    filtroProductoDetalle.trim()
+                        ? String(item.producto)
+                              .toLowerCase()
+                              .includes(filtroProductoDetalle.trim().toLowerCase())
+                        : true
+                )
+                .map((item) => {
+                let totalFila = 0;
+                return (
+                    <tr key={item.codprod} className="border-b border-slate-200 hover:bg-slate-50">
+                        <td className="px-4 py-3 font-medium text-slate-700 border-r">{item.codprod}</td>
+                        <td className="px-4 py-3 text-slate-600 border-r">{item.producto}</td>
+                        
+                        {detalleVehiculos.columnas.map((col) => {
+                            const cant = item.cantidades[col.placa] || 0;
+                            totalFila += cant;
+                            return (
+                                <td key={col.placa} className="px-4 py-3 text-center text-slate-600 border-r" title={col.vehiculo}>
+                                    {cant > 0 ? cant.toFixed(2) : '-'}
+                                </td>
+                            );
+                        })}
+                        
+                        <td className="px-4 py-3 font-bold text-slate-800 bg-slate-50 text-center">
+                            {totalFila.toFixed(2)}
+                        </td>
+                    </tr>
+                );
+            })}
+        </tbody>
+    </table>
+</div>  
         </div>
 
     );
 
 };
 
-export default ReporteFletes;
+export default EstadisticaFletes;
