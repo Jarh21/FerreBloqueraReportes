@@ -14,7 +14,7 @@ export default defineConfig({
       // Redirige peticiones que comiencen con /api al backend
       // Evita problemas de CORS en desarrollo.
       '/api': {
-        target: 'http://10.10.7.100:4000',
+        target: 'http://10.10.1.186:4500',
         changeOrigin: true,
         secure: false,
         ws: false,

@@ -12,13 +12,13 @@
     "axios": "^1.13.2",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-router-dom": "6.20.0",
+    "react-router-dom": "^6.30.3",
     "react-select": "5.10.2"
   },
   "optionalDependencies": {
-    "jquery": "^3.6.4",
     "datatables.net": "^1.13.6",
-    "datatables.net-dt": "^1.13.6"
+    "datatables.net-dt": "^1.13.6",
+    "jquery": "^3.6.4"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",

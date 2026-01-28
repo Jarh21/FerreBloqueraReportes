@@ -20,16 +20,35 @@ const GestionPagos: React.FC = () => {
     }
   }, [empresaActual?.id]);
 
-  const obtenerSolicitudes = async () => {
+ const obtenerSolicitudes = async () => {
+    // Pequeña validación de seguridad: si no hay empresa, no intentamos buscar
+    if (!empresaActual?.id) return;
+
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(buildApiUrl(`/pagos/solicitudes?empresa_id=${empresaActual?.id}`), {
-        withCredentials: true
+
+      // --- CAMBIO PRINCIPAL ---
+      // Ajustamos la URL para que coincida con 'solicitudes.routes.js'
+      // Antes: /pagos/solicitudes?empresa_id=...
+      // Ahora: /solicitudes/listar/:empresaId
+      const endpoint = `/solicitudes/listar/${empresaActual.id}`;
+
+      const response = await axios.get(buildApiUrl(endpoint), {
+        withCredentials: true,
+        // AGREGADO: Igual que en la modal, enviamos el token explícitamente
+        // para pasar el authMiddleware sin problemas.
+       /**  headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }*/
       });
+
+      // Tu lógica de respuesta se mantiene igual, ya que es robusta
       const data = Array.isArray(response.data) ? response.data : (response.data?.rows ?? []);
       setSolicitudes(data);
+
     } catch (err: any) {
+      console.error("Error fetching solicitudes:", err);
       const msg = err?.response?.data?.error || err.message || 'Error al obtener solicitudes';
       setError(msg);
     } finally {
@@ -113,8 +132,8 @@ const GestionPagos: React.FC = () => {
                 <th className="px-4 py-3 font-bold uppercase tracking-wider border-r border-slate-700">Fecha / ID</th>
                 <th className="px-4 py-3 font-bold uppercase tracking-wider border-r border-slate-700">Beneficiario</th>
                 <th className="px-4 py-3 font-bold uppercase tracking-wider border-r border-slate-700">Concepto</th>
-                <th className="px-4 py-3 font-bold uppercase tracking-wider text-right border-r border-slate-700 bg-green-900/30">Monto USD</th>
-                <th className="px-4 py-3 font-bold uppercase tracking-wider text-right border-r border-slate-700 text-yellow-300">Monto Bs</th>
+                <th className="px-4 py-3 font-bold uppercase tracking-wider text-right border-r border-slate-700 bg-green-900/30">Monto Transacción</th>
+                <th className="px-4 py-3 font-bold uppercase tracking-wider text-right border-r border-slate-700 text-yellow-300">Moneda Pago</th>
                 <th className="px-4 py-3 font-bold uppercase tracking-wider text-center border-r border-slate-700">Estatus</th>
                 <th className="px-4 py-3 font-bold uppercase tracking-wider text-center">Soporte</th>
               </tr>
@@ -135,14 +154,15 @@ const GestionPagos: React.FC = () => {
                     <div className="text-[10px] text-slate-400 italic">{sol.banco_origen ? `Banco: ${sol.banco_origen}` : ''}</div>
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-600 bg-green-50/30">
-                    {Number(sol.monto_usd).toFixed(2)} $
+                    {Number(sol.monto).toFixed(2)} 
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-slate-600">
-                     Bs {Number(sol.monto_bs).toFixed(2)}
+                      {String(sol.moneda_pago)}
                   </td>
+                  
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${getStatusStyle(sol.estatus)}`}>
-                        {sol.estatus || 'Pendiente'}
+                        {sol.estado_pago || 'Pendiente'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
