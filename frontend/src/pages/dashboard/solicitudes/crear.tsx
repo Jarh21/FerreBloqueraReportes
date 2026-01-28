@@ -7,7 +7,7 @@ import axios from 'axios';
 import ModalSolicitudPago from '../../../components/solicitudes/Modales/ModalSolicitudPago';
 
 const GestionPagos: React.FC = () => {
-  const { empresaActual } = useAuth();
+  const { empresaActual, validarModulo } = useAuth();
   
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,13 +99,14 @@ const GestionPagos: React.FC = () => {
           </h2>
           <p className="text-slate-500 text-sm">Control de solicitudes y transferencias a proveedores</p>
         </div>
-        <button 
+        {validarModulo('Solicitudes.Crear_solicitud') ? (<button 
             onClick={() => setIsModalOpen(true)}
             className="bg-red-700 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 transition-all flex items-center gap-2 active:scale-95"
         >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
             Nueva Solicitud
-        </button>
+        </button>) : null}
+        
       </div>
 
       {/* Loading & Error */}

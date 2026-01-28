@@ -133,7 +133,7 @@ const Fletes: React.FC = () => {
                 alert("Error al enviar fletes seleccionados");
             }
         };
-    const {empresaActual} = useAuth()    
+    const {empresaActual, validarModulo} = useAuth()    
 
     React.useEffect(() => {
             if (!empresaActual?.id) return;
@@ -249,7 +249,7 @@ const Fletes: React.FC = () => {
       <div className="lg:col-span-7 space-y-1">
         <div className="flex justify-between items-center mb-1 px-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vehículo</label>
-          <RegistrarVehiculo onVehiculoGuardado={handlelistarVehiculos} />
+          {validarModulo('Logistica.Fletes.RegistrarVehiculo') ? <RegistrarVehiculo onVehiculoGuardado={handlelistarVehiculos} /> : null}
         </div>
         <Select<VehiculoOption, true>
           isMulti
