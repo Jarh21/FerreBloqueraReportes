@@ -14,11 +14,11 @@ type SelectCuentaProps = {
 const SelectCuenta: React.FC<SelectCuentaProps> = ({
     value,
     onChange,
-    placeholder = "Seleccione cuenta a debitar",
+    placeholder = "Seleccione Cuenta",
     className = "text-sm px-2",
-}) => {
-     const {empresaActual} = useAuth()
-    const [contCuenta, setContCuenta] = React.useState<any[]>([]);
+    }) => {
+        const {empresaActual} = useAuth()
+        const [contCuenta, setContCuenta] = React.useState<any[]>([]);
         React.useEffect(() => {
             if (!empresaActual?.id) return;
             obtenerContableCuenta();
@@ -44,6 +44,7 @@ const SelectCuenta: React.FC<SelectCuentaProps> = ({
 
     return <div>
         <Select 
+            menuPlacement="auto"
             styles={{
                 control: (base) => ({
                 ...base,

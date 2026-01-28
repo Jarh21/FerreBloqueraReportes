@@ -1,9 +1,11 @@
 import axios from "axios";
 import React from "react";
+import Select, { MultiValue, StylesConfig } from "react-select";
 import { useAuth } from "../../../context/AuthContext";
 import { buildApiUrl } from '../../../config/api';
 import SelectCuenta from "../../../components/selectoresContables/SelectCuenta";
 import RegistrarVehiculo from "../../../components/logistica/RegistrarVehiculo";
+import SelectConcepto from "../../../components/selectoresContables/SelectConcepto";
 interface FletesProps {
     keycodigo:number;
     fecha: string;
@@ -21,21 +23,79 @@ interface FleteSeleccionado {
     total: number;
 }
 
+type VehiculoOption = { value: number; label: string };
+
 const Fletes: React.FC = () => {
     const [fletes, setFletes] = React.useState<FletesProps[]>([]);
     const [error, setError] = React.useState<string | null>(null);   
     const [vehiculos, setVehiculos] = React.useState<any[]>([]);
     const [selectedCuenta, setSelectedCuenta] = React.useState<number | null>(null);
+    const [selectedConcepto, setSelectedConcepto] = React.useState<number | null>(58);
     const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);
     const [formBusquedaFletes, setFormBusquedaFletes] = React.useState<{
-        fechaDesde: string;
-        fechaHasta: string;
-        vehiculo: number;
+      fechaDesde: string;
+      fechaHasta: string;
+      vehiculos: number[];
     }>({
         fechaDesde: "",
         fechaHasta: "",
-        vehiculo: 0
+      vehiculos: []
     });
+
+    const vehiculoOptions = React.useMemo<VehiculoOption[]>(
+      () =>
+        (vehiculos ?? []).map((v) => ({
+          value: Number(v.keycodigo),
+          label: `[${v.keycodigo}] ${v.vehiculo}`,
+        })),
+      [vehiculos]
+    );
+
+    const selectedVehiculoOptions = React.useMemo<VehiculoOption[]>(() => {
+      const selected = new Set(formBusquedaFletes.vehiculos);
+      return vehiculoOptions.filter((o) => selected.has(o.value));
+    }, [formBusquedaFletes.vehiculos, vehiculoOptions]);
+
+    const vehiculoSelectStyles = React.useMemo<StylesConfig<VehiculoOption, true>>(
+      () => ({
+        control: (base, state) => ({
+          ...base,
+          minHeight: "42px",
+          borderRadius: "0.5rem",
+          borderColor: state.isFocused ? "#b91c1c" : "#e2e8f0",
+          boxShadow: state.isFocused ? "0 0 0 2px rgba(185, 28, 28, 0.35)" : "none",
+          "&:hover": { borderColor: state.isFocused ? "#b91c1c" : "#cbd5e1" },
+          fontSize: "0.875rem",
+        }),
+        valueContainer: (base) => ({ ...base, padding: "0.25rem 0.5rem" }),
+        input: (base) => ({ ...base, margin: 0, padding: 0 }),
+        placeholder: (base) => ({ ...base, color: "#94a3b8" }),
+        multiValue: (base) => ({
+          ...base,
+          backgroundColor: "#f1f5f9",
+          border: "1px solid #e2e8f0",
+          borderRadius: "0.5rem",
+        }),
+        multiValueLabel: (base) => ({ ...base, color: "#334155", fontWeight: 600 }),
+        multiValueRemove: (base) => ({
+          ...base,
+          color: "#64748b",
+          ":hover": { backgroundColor: "#fee2e2", color: "#b91c1c" },
+        }),
+        menu: (base) => ({ ...base, borderRadius: "0.75rem", overflow: "hidden" }),
+        option: (base, state) => ({
+          ...base,
+          fontSize: "0.875rem",
+          backgroundColor: state.isSelected
+            ? "#b91c1c"
+            : state.isFocused
+              ? "#f8fafc"
+              : "white",
+          color: state.isSelected ? "white" : "#0f172a",
+        }),
+      }),
+      []
+    );
 
     // Estado para checkboxes seleccionados
   
@@ -63,7 +123,8 @@ const Fletes: React.FC = () => {
                     empresaId: empresaActual.id,
                     keycodigos,
                     montoFletes,
-                    contCuenta: selectedCuenta
+                    contCuenta: selectedCuenta,
+                    contConcepto: selectedConcepto
                 }, { withCredentials: true });
                 alert("Fletes enviados correctamente");
                 setFletesSeleccionados([]);
@@ -76,13 +137,17 @@ const Fletes: React.FC = () => {
 
     React.useEffect(() => {
             if (!empresaActual?.id) return;
-            handlelistarVehiculos();
+            //handlelistarVehiculos();
         }, [empresaActual?.id]);
 
     const handleBuscarFletesVehiculos = async () => {
-        // Lógica para buscar vehículos
-        console.log("buscando flertes");
+        // Lógica para buscar vehículos        
         try {
+            if (formBusquedaFletes.vehiculos.length === 0) {
+                setError("Selecciona al menos un vehículo para la búsqueda");
+                return;
+            } 
+            const vehiculoUnico = formBusquedaFletes.vehiculos.length === 1 ? formBusquedaFletes.vehiculos[0] : null;
             const resultado = await axios.post(
                 buildApiUrl('/logistica/fletes'),             
                 
@@ -90,30 +155,44 @@ const Fletes: React.FC = () => {
                         empresaId: empresaActual?.id,
                         fechaDesde: formBusquedaFletes.fechaDesde,
                         fechaHasta: formBusquedaFletes.fechaHasta,
-                        vehiculo: formBusquedaFletes.vehiculo
+                        vehiculo: vehiculoUnico,
+                        vehiculos: formBusquedaFletes.vehiculos
                     },
                    { withCredentials: true }
                 
             );
             setFletes(resultado.data);
-            console.log("Fletes encontrados:", resultado.data);
+            setError(null);
         } catch (error) {
             console.error("Error al buscar vehículos:", error);
             setError("Error al buscar vehículos");
         };
     }
 
-    const handlelistarVehiculos = async () => {
-        // Lógica para buscar fletes según los filtros        
-        try {
-            const resultado = await axios.get(buildApiUrl(`/logistica/vehiculos/list/${empresaActual?.id}`),             
-                 { withCredentials: true }
-            );
-            setVehiculos(resultado.data);
-        } catch (error) {
-            console.error("Error al listar vehículos:", error);
-            setError("Error al listar vehículos");
+    const handlelistarVehiculos = async (overrides?: { fechaDesde?: string; fechaHasta?: string }) => {
+      // Lógica para buscar fletes según los filtros
+      try {
+        const fechaDesde = overrides?.fechaDesde ?? formBusquedaFletes.fechaDesde;
+        const fechaHasta = overrides?.fechaHasta ?? formBusquedaFletes.fechaHasta;
+
+        if (!empresaActual?.id || !fechaDesde || !fechaHasta) {
+          return;
         }
+
+        const resultado = await axios.post(
+          buildApiUrl(`/logistica/vehiculos/list-quehizo-flete`),
+          {
+            empresaId: empresaActual?.id,
+            fechaDesde,
+            fechaHasta
+          },
+          { withCredentials: true }
+        );
+        setVehiculos(resultado.data);
+      } catch (error) {
+        console.error("Error al listar vehículos:", error);
+        setError("Error al listar vehículos");
+      }
     };
     return (
         <div className="p-6 bg-white rounded-xl shadow-lg border border-slate-200">
@@ -122,7 +201,7 @@ const Fletes: React.FC = () => {
     <div>
       <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
         <span className="w-2 h-8 bg-red-700 rounded-full"></span>
-        Fletes
+        Pago Fletes Foraneos
       </h2>
       <p className="text-slate-500 text-sm">Consulta, filtrado y despacho de fletes vehiculares</p>
     </div>
@@ -145,7 +224,11 @@ const Fletes: React.FC = () => {
         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Fecha Desde</label>
         <input 
           type="date" 
-          onChange={(e) => setFormBusquedaFletes(prev => ({ ...prev, fechaDesde: e.target.value }))} 
+          onChange={(e) => {
+            const nuevoDesde = e.target.value;
+            setFormBusquedaFletes((prev) => ({ ...prev, fechaDesde: nuevoDesde }));
+            handlelistarVehiculos({ fechaDesde: nuevoDesde, fechaHasta: formBusquedaFletes.fechaHasta });
+          }} 
           className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all" 
         />
       </div>
@@ -154,27 +237,36 @@ const Fletes: React.FC = () => {
         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Fecha Hasta</label>
         <input 
           type="date" 
-          onChange={(e) => setFormBusquedaFletes(prev => ({ ...prev, fechaHasta: e.target.value }))} 
+          onChange={(e) => {
+            const nuevoHasta = e.target.value;
+            setFormBusquedaFletes((prev) => ({ ...prev, fechaHasta: nuevoHasta }));
+            handlelistarVehiculos({ fechaDesde: formBusquedaFletes.fechaDesde, fechaHasta: nuevoHasta });
+          }} 
           className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all" 
         />
       </div>
 
-      <div className="lg:col-span-4 space-y-1">
+      <div className="lg:col-span-7 space-y-1">
         <div className="flex justify-between items-center mb-1 px-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vehículo</label>
           <RegistrarVehiculo onVehiculoGuardado={handlelistarVehiculos} />
         </div>
-        <select
-          onChange={(e) => setFormBusquedaFletes(prev => ({ ...prev, vehiculo: Number(e.target.value) }))}
-          className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all appearance-none"
-        >
-          <option value="">Todos los Vehículos</option>
-          {vehiculos.map((v) => (
-            <option key={v.keycodigo} value={v.keycodigo}>
-              [{v.keycodigo}] {v.vehiculo}
-            </option>
-          ))}
-        </select>
+        <Select<VehiculoOption, true>
+          isMulti
+          isClearable
+          closeMenuOnSelect={false}
+          options={vehiculoOptions}
+          value={selectedVehiculoOptions}
+          placeholder="Todos los Vehículos"
+          noOptionsMessage={() => "No hay vehículos"}
+          onChange={(newValue: MultiValue<VehiculoOption>) => {
+            const seleccion = newValue.map((o) => o.value);
+            setFormBusquedaFletes((prev) => ({ ...prev, vehiculos: seleccion }));
+          }}
+          className="w-full"
+          styles={vehiculoSelectStyles}
+        />
+        
       </div>
 
       <div className="lg:col-span-1">
@@ -187,24 +279,7 @@ const Fletes: React.FC = () => {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </button>
       </div>
-
-      {/* Selector de Cuenta y Enviar */}
-      <div className="lg:col-span-3 flex flex-col gap-2 border-l border-slate-200 pl-6 ml-auto w-full">
-        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cuenta Destino</label>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <SelectCuenta value={selectedCuenta} onChange={setSelectedCuenta} />
-          </div>
-          <button
-            type="button"
-            className="bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 shadow-md shadow-blue-100 transition-all disabled:opacity-30 disabled:grayscale active:scale-95"
-            onClick={handleEnviarSeleccionados}
-            disabled={fletesSeleccionados.length === 0 || selectedCuenta === null}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-          </button>
-        </div>
-      </div>
+      
     </div>
   </form>
 
@@ -273,6 +348,30 @@ const Fletes: React.FC = () => {
         </table>
       </div>
     )}
+  </div>
+  <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-6 items-end pt-6">
+  {/* Selector de Cuenta y Enviar */}
+      <div className="lg:col-span-12 flex flex-col gap-2 border-l border-slate-200 pl-6 ml-auto w-full">
+        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cuenta Destino</label>
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <SelectConcepto value={selectedConcepto} onChange={setSelectedConcepto} />
+            
+          </div>
+          <div className="flex-1">
+            
+            <SelectCuenta value={selectedCuenta} onChange={setSelectedCuenta} />
+          </div>
+          <button
+            type="button"
+            className="bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 shadow-md shadow-blue-100 transition-all disabled:opacity-30 disabled:grayscale active:scale-95"
+            onClick={handleEnviarSeleccionados}
+            disabled={fletesSeleccionados.length === 0 || selectedCuenta === null || selectedConcepto === null}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+          </button>
+        </div>
+      </div>
   </div>
 </div>
     );

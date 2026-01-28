@@ -807,13 +807,12 @@ export const eliminarCuadreArqueoEgreso = async (req, res) => {
     res.status(500).json({ error: "Error al eliminar registro" })
   }
 }
+
+//INSERTAR REGISTRO EN EL FRLUJO DE EFECTIVO SIACE
 export const exportarAlFlujoEfectivoSiace = async (req, res) => {
   const { empresaId, fecha } = req.params;
-
   try {
-
     // 0. Validar si existe un arqueo abierto no realiza la exportacion para esa fecha
-
     const validarArqueoAbierto = `
       SELECT COUNT(*) AS total
       FROM mov_pagos mp
@@ -920,7 +919,7 @@ export const exportarAlFlujoEfectivoSiace = async (req, res) => {
          fecha, codusua, usuario, equipo, registrado) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, NOW())
       `;
-      
+      console.log("fecha a insertar :",fecha);
       const params = [
         fecha,                      // fecha_de_operacion
         nuevoComprobante,           // comprobante (mismo para todos)
