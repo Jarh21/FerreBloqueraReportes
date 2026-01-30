@@ -1082,7 +1082,7 @@ export const obtenerContContable = async (request, response)=>{
   try {
     const { empresaId} = request.params
     if (!empresaId) return response.status(400).json({ error: 'Faltan parámetros' })
-    const consultaSQL = `SELECT keycodigo,nombre,codtipomoneda,is_activa FROM cont_cuenta`;
+    const consultaSQL = `SELECT c.keycodigo,c.nombre,codtipomoneda,t.is_nacional AS nacional FROM cont_cuenta c,tipo_moneda t WHERE c.codtipomoneda=t.keycodigo AND c.is_activa=1`;
     const resultados = await ejecutarConsultaEnEmpresaPorId(empresaId, consultaSQL)
     response.json(resultados)
   } catch (error) {
@@ -1179,7 +1179,7 @@ export const obtenerTodosTipoMoneda = async (req, res) => {
 
     //const consultaSQL = `SELECT keycodigo,nombre_singular,abreviatura,precio_venta_moneda_nacional FROM tipo_moneda WHERE is_activo = 1`;
     //const resultados = await ejecutarConsultaEnEmpresaPorId(empresaId, consultaSQL, [])
-    const cosultaSQL =`SELECT id as keycodigo,abreviatura,monto_moneda_nacional as valor,tipo_moneda_id as tipoMoneda FROM tipo_tasa_cambiaria WHERE is_activo = 1`;
+    const cosultaSQL =`SELECT id as keycodigo,abreviatura,monto_moneda_nacional as valor,tipo_moneda_id as tipoMoneda,is_moneda_nacional as nacional FROM tipo_tasa_cambiaria WHERE is_activo = 1`;
     const [resultados] = await pool.query(cosultaSQL)
     res.json(resultados)
   } catch (error) {

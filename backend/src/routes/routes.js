@@ -89,6 +89,7 @@ router.get("/finanzas/exportar-flujo-efectivo-siace/:empresaId/:fecha", authMidd
 router.get("/finanzas/:empresaId", authMiddleware, obtenerFinanzas)
 router.post("/finanzas/flujo-efectivo-siace", authMiddleware, buscarFlujoEfectivoSiacePorFecha)
 router.get("/finanzas/contable-cuenta/:empresaId",authMiddleware, obtenerContContable)
+router.get("/finanzas/tipo-moneda/:empresaId",authMiddleware, obtenerTodosTipoMoneda)
 // ...agrega aquí el resto de rutas de finanzas según tu archivo original
 
 // Reportes

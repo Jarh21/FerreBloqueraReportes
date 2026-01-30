@@ -154,7 +154,7 @@ export const obtenerAutosFletes = async (req, res) => {
 export const guardarFletesSeleccionados = async (req, res) => {
     
     try {
-        const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes,descripcion } = req.body; 
+        const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes,descripcion, tasaCambio, tipoMonedaNacional } = req.body; 
        
         if (!empresaId || keycodigos.length === 0 || !contCuenta || !contConcepto || !montoFletes) {
            
@@ -166,14 +166,14 @@ export const guardarFletesSeleccionados = async (req, res) => {
 
         //conseguimos el ultimo comprobante
         const nuevoComprobante = await nuevoComprobanteFlujoEfectivoSiace(empresaId);        
-
+        const montoEnMonedaLocal = tipoMonedaNacional === 1 ? sumaMontoFletes : sumaMontoFletes * tasaCambio;
         //insertamos el asiento contable
         const asientoSql = ` INSERT INTO cont_registro 
         (fecha_de_operacion, comprobante, codcuenta, codconcepto, descripcion, 
          debito, credito, monto_moneda_cuenta_debito, monto_moneda_cuenta_credito, 
          fecha, codusua, usuario, equipo, registrado) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, NOW())`;
-        const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, sumaMontoFletes,0,sumaMontoFletes,9,'SISTEMA-REPORTES','SERVER'];
+        const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, sumaMontoFletes,0,montoEnMonedaLocal,9,'SISTEMA-REPORTES','SERVER'];
         await pool.query(asientoSql, asientoValores);
 
         //guardar en la tabla logistica_fletes_cancelados

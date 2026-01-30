@@ -30,7 +30,8 @@ const SelectCuenta: React.FC<SelectCuentaProps> = ({
         { value: '', label: 'Seleccione cuenta', isDisabled: true },
         ...contCuenta.map((cuenta: any) => ({
             value: cuenta.keycodigo,
-            label: cuenta.nombre
+            label: cuenta.nombre,
+            codtipomoneda: cuenta.nacional,
         }))
     ];
     

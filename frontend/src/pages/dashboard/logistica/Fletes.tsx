@@ -31,10 +31,12 @@ const Fletes: React.FC = () => {
     const [error, setError] = React.useState<string | null>(null);   
     const [vehiculos, setVehiculos] = React.useState<any[]>([]);
     const [selectedCuenta, setSelectedCuenta] = React.useState<number | null>(null);
+    const [selectedCuentaTipoMoneda, setSelectedCuentaTipoMoneda] = React.useState<any | null>(null);
     const [descripcion, setDescripcion] = React.useState<string>("PAGO DE FLETES EXTERNOS");
     const [selectedConcepto, setSelectedConcepto] = React.useState<number | null>(58);
     const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);    
     const [tasaCambio, setTasaCambio] = React.useState<number | ''>('');
+    const [tasaSeleccionadaId, setTasaSeleccionadaId] = React.useState<number | string | null>(null);
     const [formBusquedaFletes, setFormBusquedaFletes] = React.useState<{
       fechaDesde: string;
       fechaHasta: string;
@@ -128,7 +130,9 @@ const Fletes: React.FC = () => {
                     montoFletes,
                     contCuenta: selectedCuenta,
                     contConcepto: selectedConcepto,
-                    descripcion: descripcion
+                    descripcion: descripcion,
+                    tasaCambio: tasaCambio,
+                    tipoMonedaNacional: selectedCuentaTipoMoneda,
                 }, { withCredentials: true });
                 alert("Fletes enviados correctamente");
                 setFletesSeleccionados([]);
@@ -367,19 +371,39 @@ const Fletes: React.FC = () => {
             
           </div>
           <div className="flex-1">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cuenta Destino</label>
-            <SelectCuenta value={selectedCuenta} onChange={setSelectedCuenta} />
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cuenta Destino -tipomoneda: {selectedCuentaTipoMoneda}</label>
+            <SelectCuenta 
+                value={selectedCuenta} 
+                onChange={(value, extraData) => { 
+                    setSelectedCuenta(value); 
+                    if (extraData) {
+                        setSelectedCuentaTipoMoneda(extraData.codtipomoneda);
+                        
+                        // Usamos un pequeño timeout o validación para asegurar que el estado se limpie
+                        const nuevaTasa = extraData.codtipomoneda === 1 ? 5 : 1;
+                        setTasaSeleccionadaId(nuevaTasa);
+                        
+                        // Actualizamos también el valor de la tasa para el envío del formulario
+                        // Necesitas buscar el valor de la tasa 5 o 1 aquí si quieres que el estado 
+                        // 'tasaCambio' del padre se actualice inmediatamente.
+                    }
+                }} 
+            />
           </div>
           <div className="flex-1 w-full">
              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tasa de Cambio {tasaCambio}</label>
               <SeleccionarTasa
-                value={tasaCambio}
-                onChange={(valor) => setTasaCambio(valor)}
+                  value={tasaCambio}
+                  selectedId={tasaSeleccionadaId} // Pasamos la "señal"
+                  onChange={(valor, origen) => {
+                      setTasaCambio(valor);
+                      setTasaSeleccionadaId(origen); // Mantener sincronizado si el usuario cambia manualmente
+                  }}
               />
           </div>
           <div className="flex-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</label>
-            <input type="text" className="text-sm rounded border border-slate-600 px-2 py-2 w-full font-bold text-slate-400" placeholder="Descripcion" value={descripcion} onChange={e => setDescripcion(e.target.value)} /> 
+            <input type="text" className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg px-2 py-3 w-full" placeholder="Descripcion" value={descripcion} onChange={e => setDescripcion(e.target.value)} /> 
           </div>
           <button
             type="button"

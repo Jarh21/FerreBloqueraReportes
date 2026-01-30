@@ -8,82 +8,81 @@ interface TipoMoneda {
     abreviatura: string;
     valor: number;
     tipoMoneda:number;
+    nacional:number;
 }
 
 interface SeleccionarTasaProps {
     value?: number | '';
+    selectedId?: number | string | null; // Nueva prop para forzar selección desde afuera
     onChange?: (value: number | '', origen: string) => void;
 }
 
-const SeleccionarTasa: React.FC<SeleccionarTasaProps> = ({ value, onChange }) => {
+const SeleccionarTasa: React.FC<SeleccionarTasaProps> = ({ value, selectedId, onChange }) => {
     const { empresaActual } = useAuth();
-
     const [tipoMoneda, setTipoMoneda] = React.useState<TipoMoneda[]>([]);
     const [origenTasa, setOrigenTasa] = React.useState<string>('');
     const [tasaValor, setTasaValor] = React.useState<number | ''>(value ?? '');
 
-    const handleObtenerTodosTipoMoneda = async () => {
-        const response = await axios.get(buildApiUrl(`/finanzas/tipo-moneda/${empresaActual?.id}`), { withCredentials: true });
-        console.log("Tipo de Moneda frontend:", response.data);
-        setTipoMoneda(response.data);
-    };
-
+    // 1. Cargar datos (Solo al montar o cambiar empresa)
     React.useEffect(() => {
-        if (empresaActual?.id) handleObtenerTodosTipoMoneda();
+        if (empresaActual?.id) {
+            axios.get(buildApiUrl(`/finanzas/tipo-moneda/${empresaActual?.id}`), { withCredentials: true })
+                .then(res => setTipoMoneda(res.data));
+        }
     }, [empresaActual?.id]);
 
+    // 2. Reaccionar a la señal del padre (selectedId) sin disparar onChange
     React.useEffect(() => {
-        if (tipoMoneda.length > 0 && !origenTasa) {
-            const first = tipoMoneda[0];
-            setOrigenTasa(first.keycodigo.toString());
-            setTasaValor(Number(first.valor));
+        if (selectedId && tipoMoneda.length > 0) {
+            const moneda = tipoMoneda.find(m => m.keycodigo.toString() === selectedId.toString());
+            if (moneda) {
+                setOrigenTasa(moneda.keycodigo.toString());
+                setTasaValor(Number(moneda.valor));
+                // IMPORTANTE: No llamamos a onChange aquí para evitar el bucle infinito
+            }
         }
-    }, [tipoMoneda, origenTasa]);
+    }, [selectedId, tipoMoneda]);
 
-    React.useEffect(() => {
-        if (value !== undefined) setTasaValor(value);
-    }, [value]);
-
-    React.useEffect(() => {
-        if (onChange) onChange(tasaValor, origenTasa);
-    }, [tasaValor, origenTasa, onChange]);
+    // 3. Manejador de cambios del Usuario (Aquí SÍ notificamos al padre)
+    const handleManualChange = (nuevaTasaId: string) => {
+        setOrigenTasa(nuevaTasaId);
+        if (nuevaTasaId === 'MANUAL') {
+            setTasaValor('');
+            if (onChange) onChange('', 'MANUAL');
+        } else {
+            const moneda = tipoMoneda.find((m) => m.keycodigo.toString() === nuevaTasaId);
+            const nuevoValor = moneda ? Number(moneda.valor) : '';
+            setTasaValor(nuevoValor);
+            if (onChange) onChange(nuevoValor, nuevaTasaId);
+        }
+    };
 
     return (
         <div className="w-full">
-            <div className='w-full'>
-                <div className="flex w-full">
-                    <select
-                        name="origenTasa"
-                        id="origenTasa"
-                        value={origenTasa}
-                        onChange={(e) => {
-                            const valueSelect = e.target.value;
-                            setOrigenTasa(valueSelect);
-                            if (valueSelect === 'MANUAL') {
-                                setTasaValor('');
-                                return;
-                            }
-                            const moneda = tipoMoneda.find((m) => m.keycodigo.toString() === valueSelect);
-                            setTasaValor(moneda ? Number(moneda.valor) : '');
-                        }}
-                        className="bg-slate-100 border border-slate-200 text-xs font-bold text-slate-600 rounded-l-lg px-2 py-2 outline-none focus:bg-white hover:bg-slate-200 transition-colors cursor-pointer min-w-[88px]"
-                    >
-                        {tipoMoneda.map((moneda) => (
-                            <option key={moneda.keycodigo} value={moneda.keycodigo}>
-                                {moneda.abreviatura}-{moneda.tipoMoneda}
-                            </option>
-                        ))}
-                        <option value="MANUAL">Manual</option>
-                    </select>
-                    <input 
-                        type="number" 
-                        step="0.01"
-                        value={tasaValor}
-                        onChange={(e) => setTasaValor(e.target.value === '' ? '' : Number(e.target.value))}
-                        readOnly={origenTasa !== 'MANUAL'} 
-                        className={`flex-1 min-w-0 p-2.5 border border-l-0 border-slate-200 rounded-r-lg text-sm outline-none transition-all ${origenTasa !== 'MANUAL' ? 'bg-slate-50 text-slate-500' : 'bg-white text-slate-800 focus:ring-2 focus:ring-red-700'}`} 
-                    />
-                </div>
+            <div className="flex w-full">
+                <select
+                    value={origenTasa}
+                    onChange={(e) => handleManualChange(e.target.value)}
+                    className="bg-slate-100 border border-slate-200 text-xs font-bold rounded-l-lg px-2 py-2"
+                >
+                    {tipoMoneda.map((moneda) => (
+                        <option key={moneda.keycodigo} value={moneda.keycodigo}>
+                            {moneda.abreviatura}-{moneda.nacional}
+                        </option>
+                    ))}
+                    <option value="MANUAL">Manual</option>
+                </select>
+                <input 
+                    type="number" 
+                    value={tasaValor}
+                    onChange={(e) => {
+                        const val = e.target.value === '' ? '' : Number(e.target.value);
+                        setTasaValor(val);
+                        if (onChange) onChange(val, origenTasa);
+                    }}
+                    readOnly={origenTasa !== 'MANUAL'} 
+                    className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-r-lg px-2 py-3 w-full text-right" 
+                />
             </div>
         </div>
     );
