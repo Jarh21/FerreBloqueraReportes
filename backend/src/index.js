@@ -67,5 +67,4 @@ const PORT = process.env.PORT
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor ejecutándose en puerto ${PORT}`)
 })
-
-app.use('/uploads', express.static(path.join(__dirname, '../public/uploads/comprobantes')));
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads/')));
