@@ -2,6 +2,10 @@
 import { obtenerAutosFletes, obtenerAutos,obtenerAutosQueRealizaronFletes,guardarFletesSeleccionados,obtenerAutosSiace,guardarVehiculo,obtenerTotalFletesPorVehiculo, obtenerDetalleFacturasPorVehiculo } from "../modules/logistica/logistica.controller.js"
 
 import express from "express"
+// NUEVOS IMPORTS PARA ARCHIVOS
+import multer from "multer"
+import path from "path"
+
 // Auth
 import { registro, login, logout, me } from "../modules/auth/auth.controller.js"
 import { authMiddleware, adminMiddleware } from "../middleware/auth.js"
@@ -13,8 +17,27 @@ import { obtenerContContable,obtenerFinanzas,crearFinanza,listaAsesores,guardarC
 import { obtenerEstadoProveedores, obtenerVentas, obtenerSaldos, totalSaldoEmpresa } from "../modules/reportes/reportes.controller.js"
 // Usuarios
 import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, editarUsuarios, obtenerRoles} from "../modules/usuarios/usuarios.controller.js"
-//solicitudes
+// Solicitudes - Entidades
 import { ObtenerEntidades} from "../modules/solicitudes/entidades.controller.js"
+
+// Solicitudes - Controller (Agregado ProcesarPago aquí)
+import { CrearSolicitud, ObtenerSolicitudes, BuscarBeneficiarios, ProcesarPago } from "../modules/solicitudes/solicitudes.controller.js";
+
+// --- CONFIGURACIÓN DE MULTER (CARGA DE IMÁGENES) ---
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        // La carpeta debe existir en tu servidor: 'public/uploads/comprobantes'
+        cb(null, 'public/uploads/comprobantes'); 
+    },
+    filename: (req, file, cb) => {
+        // Generamos nombre único: timestamp + aleatorio + extensión original
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage: storage });
+// ----------------------------------------------------
 
 const router = express.Router()
 
@@ -40,6 +63,7 @@ router.post("/finanzas/cuadre-denominacion", authMiddleware, guardarDenominacion
 router.post("/finanzas/cuadre-arqueo-ingreso", authMiddleware, guardarCuadreArqueoIngreso)
 router.get("/finanzas/cuadre-efectivo-detallado/:codusua", authMiddleware, obtenerCuadreEfectivoDetallado)
 router.delete("/finanzas/cuadre-efectivo-detallado/:id", authMiddleware, eliminarCuadreEfectivoDetallado)
+// ... Resto de rutas de finanzas restauradas del corte ...
 router.get("/finanzas/cuadre-stream/:empresaId/:codusua", authMiddleware, sseSubscribeCuadre)
 router.get("/finanzas/datos-arqueo-asesor/:empresaId/:fecha/:codusua", authMiddleware, obtenerDatosArqueoAsesor)
 router.get("/finanzas/conceptos-contables/:empresaId", authMiddleware, obtenerConceptosContables)
@@ -65,7 +89,7 @@ router.get("/finanzas/exportar-flujo-efectivo-siace/:empresaId/:fecha", authMidd
 router.get("/finanzas/:empresaId", authMiddleware, obtenerFinanzas)
 router.post("/finanzas/flujo-efectivo-siace", authMiddleware, buscarFlujoEfectivoSiacePorFecha)
 router.get("/finanzas/contable-cuenta/:empresaId",authMiddleware, obtenerContContable)
-// ...agrega aquí el resto de rutas de finanzas según tu archivo original
+
 
 // Reportes
 router.get("/reportes/proveedores/:empresaId", authMiddleware, obtenerEstadoProveedores)
@@ -74,15 +98,12 @@ router.get("/reportes/saldos/:empresaId", authMiddleware, obtenerSaldos)
 router.get("/reportes/total-saldo/:empresaId",  totalSaldoEmpresa)
 
 // Pagos - Solicitudes
-/*import { obtenerSolicitudes, crearSolicitud } from "../modules/pagos/pagos.controller.js"
-router.get("/pagos/solicitudes", authMiddleware, obtenerSolicitudes)
-router.post("/pagos/solicitudes", authMiddleware, crearSolicitud)
-*/
-
-import { CrearSolicitud,ObtenerSolicitudes, BuscarBeneficiarios } from "../modules/solicitudes/solicitudes.controller.js";
-router.post("/solicitudes/crear", CrearSolicitud);
+router.post("/solicitudes/crear",CrearSolicitud);
 router.get("/solicitudes/listar/:empresaId", ObtenerSolicitudes);
 router.get("/solicitudes/buscar-beneficiario", BuscarBeneficiarios);
+
+// NUEVA RUTA: Procesar Pago (Con middleware Multer)
+router.post("/solicitudes/procesar", authMiddleware, upload.single('comprobante'), ProcesarPago);
 
 // Usuarios
 router.get("/usuarios", authMiddleware, adminMiddleware, obtenerUsuarios)
@@ -104,4 +125,5 @@ router.post("/logistica/fletes/detalle-por-vehiculo", authMiddleware, obtenerDet
 
 // Solicitudes - Entidades
 router.get("/solicitudes/entidades",  ObtenerEntidades)
+
 export default router
