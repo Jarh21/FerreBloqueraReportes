@@ -30,7 +30,7 @@ const SelectorBancos: React.FC<SelectorBancosProps> = ({
     const fetchBancos = async () => {
       setLoading(true);
       try {
-        const url = buildApiUrl('/solicitudes/entidades'); 
+        const url = buildApiUrl('/finanzas/contable-cuenta/'); 
         const response = await axios.get(url);
         
         // Ajustamos según si la API devuelve el array directo o dentro de un objeto

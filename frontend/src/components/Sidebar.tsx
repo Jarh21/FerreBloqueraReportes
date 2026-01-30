@@ -76,8 +76,8 @@ export default function Sidebar({ open }: SidebarProps) {
             icon: "🧾",
             submenu: [
               { label: "Crear solicitud", href: "/dashboard/solicitudes/crear" },
-              { label: "Pagar a personas/instituciones", href: "/dashboard/solicitudes/pagar" },
-              { label: "Estado de solicitudes", href: "/dashboard/solicitudes/estado" },
+              
+              { label: "Estado de solicitudes", href: "/dashboard/solicitudes/consulta" },
               
             ],
           },

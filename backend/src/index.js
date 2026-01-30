@@ -3,7 +3,12 @@ import session from "express-session"
 import cors from "cors"
 import dotenv from "dotenv"
 import routes from "./routes/routes.js"
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+// Configuraciones para obtener __dirname en módulos ES6
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 dotenv.config()
 
 const app = express()
@@ -62,3 +67,4 @@ const PORT = process.env.PORT
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor ejecutándose en puerto ${PORT}`)
 })
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads/')));

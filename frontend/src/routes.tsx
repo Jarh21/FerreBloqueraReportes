@@ -25,6 +25,7 @@ import Calendar from "./pages/dashboard/finanzas/Calendar"
 import InformeEfectivo from "./pages/dashboard/finanzas/InformeEfectivo"
 import BuscarFlujoEfectivo from "./pages/dashboard/finanzas/BuscarFlujoEfectivo"
 import SolicitudesCrear from "./pages/dashboard/solicitudes/crear"
+import ConsultaPagos from "./pages/dashboard/solicitudes/consulta"
 
 export default function AppRoutes() {
   return (
@@ -64,6 +65,7 @@ export default function AppRoutes() {
         <Route path="logistica/reporte-fletes" element={<EstadisticaFletes />} />    
         {/* Solicitudes */}
         <Route path="solicitudes/crear" element={<SolicitudesCrear />} />
+        <Route path="solicitudes/consulta" element={<ConsultaPagos />} />
         
       </Route>
 
