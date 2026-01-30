@@ -1,3 +1,4 @@
+//este componente retorna dos valores el id de la cuenta y el objeto completo de la cuenta seleccionada
 import Select from 'react-select';
 import axios from "axios";
 import React from "react";
@@ -6,7 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 
 type SelectCuentaProps = {
     value: number | null;
-    onChange: (value: number | null) => void;
+    onChange: (value: number | null, extraData?: any) => void;
     placeholder?: string;
     className?: string;
 };
@@ -56,7 +57,13 @@ const SelectCuenta: React.FC<SelectCuentaProps> = ({
             }}
             getOptionValue={(opt: any) => String(opt.value)}
             placeholder={placeholder}
-            onChange={(opt: any) => onChange(opt?.value ?? null)}                       
+            onChange={(opt: any) =>{
+                if(!opt){
+                    onChange(null);
+                }else{
+                    onChange(opt.value ?? null, opt);
+                }
+            }} //onChange(opt?.value ?? null)}                       
             options={options}
             value={options.find((opt: any) => opt.value === value) || null}
             className={className}

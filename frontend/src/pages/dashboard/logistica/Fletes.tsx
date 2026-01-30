@@ -6,6 +6,7 @@ import { buildApiUrl } from '../../../config/api';
 import SelectCuenta from "../../../components/selectoresContables/SelectCuenta";
 import RegistrarVehiculo from "../../../components/logistica/RegistrarVehiculo";
 import SelectConcepto from "../../../components/selectoresContables/SelectConcepto";
+import SeleccionarTasa from "../../../components/finanzas/SeleccionarTasa";
 interface FletesProps {
     keycodigo:number;
     fecha: string;
@@ -30,8 +31,10 @@ const Fletes: React.FC = () => {
     const [error, setError] = React.useState<string | null>(null);   
     const [vehiculos, setVehiculos] = React.useState<any[]>([]);
     const [selectedCuenta, setSelectedCuenta] = React.useState<number | null>(null);
+    const [descripcion, setDescripcion] = React.useState<string>("PAGO DE FLETES EXTERNOS");
     const [selectedConcepto, setSelectedConcepto] = React.useState<number | null>(58);
-    const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);
+    const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);    
+    const [tasaCambio, setTasaCambio] = React.useState<number | ''>('');
     const [formBusquedaFletes, setFormBusquedaFletes] = React.useState<{
       fechaDesde: string;
       fechaHasta: string;
@@ -110,7 +113,7 @@ const Fletes: React.FC = () => {
         });
     };
 
-        // Enviar fletes seleccionados
+        // Enviar fletes seleccionados para Guardar en cont_registro y logistica_fletes_cancelados
         const handleEnviarSeleccionados = async () => {
             if (!empresaActual?.id || fletesSeleccionados.length === 0) {
                 alert("Selecciona al menos un flete y asegúrate de tener una empresa activa.");
@@ -124,7 +127,8 @@ const Fletes: React.FC = () => {
                     keycodigos,
                     montoFletes,
                     contCuenta: selectedCuenta,
-                    contConcepto: selectedConcepto
+                    contConcepto: selectedConcepto,
+                    descripcion: descripcion
                 }, { withCredentials: true });
                 alert("Fletes enviados correctamente");
                 setFletesSeleccionados([]);
@@ -133,11 +137,14 @@ const Fletes: React.FC = () => {
                 alert("Error al enviar fletes seleccionados");
             }
         };
-    const {empresaActual, validarModulo} = useAuth()    
+    const {empresaActual, validarModulo} = useAuth() 
+    
+    
 
     React.useEffect(() => {
             if (!empresaActual?.id) return;
             //handlelistarVehiculos();
+           
         }, [empresaActual?.id]);
 
     const handleBuscarFletesVehiculos = async () => {
@@ -349,18 +356,30 @@ const Fletes: React.FC = () => {
       </div>
     )}
   </div>
-  <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-6 items-end pt-6">
+  <div className="grid grid-cols-4 md:grid-cols-2 lg:grid-cols-12 gap-6 items-end pt-6">
   {/* Selector de Cuenta y Enviar */}
       <div className="lg:col-span-12 flex flex-col gap-2 border-l border-slate-200 pl-6 ml-auto w-full">
-        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cuenta Destino</label>
+        
         <div className="flex gap-2">
           <div className="flex-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Concepto</label>
             <SelectConcepto value={selectedConcepto} onChange={setSelectedConcepto} />
             
           </div>
           <div className="flex-1">
-            
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cuenta Destino</label>
             <SelectCuenta value={selectedCuenta} onChange={setSelectedCuenta} />
+          </div>
+          <div className="flex-1 w-full">
+             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tasa de Cambio {tasaCambio}</label>
+              <SeleccionarTasa
+                value={tasaCambio}
+                onChange={(valor) => setTasaCambio(valor)}
+              />
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</label>
+            <input type="text" className="text-sm rounded border border-slate-600 px-2 py-2 w-full font-bold text-slate-400" placeholder="Descripcion" value={descripcion} onChange={e => setDescripcion(e.target.value)} /> 
           </div>
           <button
             type="button"

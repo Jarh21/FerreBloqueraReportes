@@ -1171,3 +1171,19 @@ export const nuevoComprobanteFlujoEfectivoSiace = async(empresaId)=> {
     }
     return nuevoComprobante;
 }
+
+export const obtenerTodosTipoMoneda = async (req, res) => {
+  try {
+    const { empresaId } = req.params
+    if (!empresaId) return res.status(400).json({ error: 'Falta empresaId' })
+
+    //const consultaSQL = `SELECT keycodigo,nombre_singular,abreviatura,precio_venta_moneda_nacional FROM tipo_moneda WHERE is_activo = 1`;
+    //const resultados = await ejecutarConsultaEnEmpresaPorId(empresaId, consultaSQL, [])
+    const cosultaSQL =`SELECT id as keycodigo,abreviatura,monto_moneda_nacional as valor,tipo_moneda_id as tipoMoneda FROM tipo_tasa_cambiaria WHERE is_activo = 1`;
+    const [resultados] = await pool.query(cosultaSQL)
+    res.json(resultados)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'Error al obtener tipos de moneda' })
+  }
+}

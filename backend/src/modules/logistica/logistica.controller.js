@@ -116,18 +116,19 @@ export const obtenerAutosFletes = async (req, res) => {
                 f.keycodigo, 
                 DATE_FORMAT(f.registrado, '%d-%m-%Y') AS fecha,
                 l.documento,
-                l.fiscalcomp,
-                f.receptor_nombre AS cliente,
+                d.fiscalcomp,
+                d.nomclie AS cliente,
                 f.total,
                 CONCAT_WS(' ', 
                     f.ultimo_logistica_vehiculo_marca_asignado, 
                     f.ultimo_logistica_vehiculo_modelo_asignado, 
                     f.ultimo_logistica_vehiculo_placa_asignado
                 ) AS vehiculo,
-                f.ultimo_cod_logistica_vehiculo_asignado as vehiculoId,
+                f.ultimo_cod_logistica_vehiculo_asignado AS vehiculoId,
                 f.status_nombre AS estatus
             FROM factura_tipo_logistica f
             INNER JOIN logistica_factura l ON f.keycodigo = l.cod_factura_tipo_logistica
+            INNER JOIN facturas d ON d.documento = l.documento
             WHERE 
                 f.fecha_enviado_servidor_logistica BETWEEN ? AND ?
                 AND f.status_codigo = 4
@@ -153,7 +154,7 @@ export const obtenerAutosFletes = async (req, res) => {
 export const guardarFletesSeleccionados = async (req, res) => {
     
     try {
-        const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes } = req.body; 
+        const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes,descripcion } = req.body; 
        
         if (!empresaId || keycodigos.length === 0 || !contCuenta || !contConcepto || !montoFletes) {
            
@@ -172,7 +173,7 @@ export const guardarFletesSeleccionados = async (req, res) => {
          debito, credito, monto_moneda_cuenta_debito, monto_moneda_cuenta_credito, 
          fecha, codusua, usuario, equipo, registrado) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, NOW())`;
-        const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto,'PAGO DE FLETES EXTERNOS', 0, sumaMontoFletes,0,sumaMontoFletes,9,'SISTEMA-REPORTES','SERVER'];
+        const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, sumaMontoFletes,0,sumaMontoFletes,9,'SISTEMA-REPORTES','SERVER'];
         await pool.query(asientoSql, asientoValores);
 
         //guardar en la tabla logistica_fletes_cancelados
