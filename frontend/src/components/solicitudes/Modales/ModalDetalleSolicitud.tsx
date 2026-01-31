@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 
-// URL Base del Backend
 const API_BASE_URL = 'http://localhost:4500'; 
 
 interface ModalDetalleSolicitudProps {
@@ -13,8 +12,8 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
     isOpen, onClose, solicitud 
 }) => {
     
-    // --- NUEVO ESTADO PARA EL ZOOM ---
-    const [zoomOpen, setZoomOpen] = useState(false);
+    // Zoom para ver comprobantes
+    const [zoomUrl, setZoomUrl] = useState<string | null>(null);
 
     if (!isOpen || !solicitud) return null;
 
@@ -34,131 +33,147 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
         return `${API_BASE_URL}${url}`;
     };
 
-    const imgUrl = getImagenUrl(solicitud.comprobante_url || solicitud.comprobante);
+    // --- LÓGICA CLAVE: Recuperar el array de pagos ---
+    // Si viene del backend nuevo, usa 'solicitud.pagos'. Si es viejo, usa los datos planos como fallback.
+    const historialPagos = (solicitud.pagos && solicitud.pagos.length > 0) 
+        ? solicitud.pagos 
+        : (solicitud.total_pagado > 0 ? [{
+            id: 'legacy',
+            creado_en: solicitud.updated_at || solicitud.creado_en,
+            banco_origen: solicitud.banco_origen,
+            referencia: solicitud.referencia_pago,
+            monto_pagado: solicitud.total_pagado,
+            comprobante_url: solicitud.comprobante_url
+          }] : []);
+
+    const deudaPendiente = Math.max(0, parseFloat(solicitud.monto) - parseFloat(solicitud.total_pagado || 0));
 
     return (
         <>
-            {/* --- MODAL PRINCIPAL --- */}
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto flex flex-col">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col">
                     
                     {/* Header */}
                     <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-50 rounded-t-xl">
                         <div>
                             <h3 className="text-xl font-black text-blue-800">Detalles de la Solicitud</h3>
-                            <p className="text-xs text-blue-600">ID: #{solicitud.id} • Creado el {new Date(solicitud.creado_en).toLocaleDateString()}</p>
+                            <p className="text-xs text-blue-600">ID: #{solicitud.id} • Fecha: {new Date(solicitud.creado_en).toLocaleDateString()}</p>
                         </div>
                         <button onClick={onClose} className="text-slate-400 hover:text-red-700 font-bold p-2 transition-colors">✕</button>
                     </div>
 
                     <div className="p-6">
                         
-                        {/* SECCIÓN 1: BENEFICIARIO */}
-                        <div className={sectionTitleClass}>
-                            <span className={badgeClass}>BENEFICIARIO</span>
-                            <div className="h-px bg-slate-200 flex-1"></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
-                            <div>
-                                <label className={labelClass}>Nombre / Razón Social</label>
-                                <div className={dataClass}>{solicitud.beneficiario_nombre}</div>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Documento (RIF/CI)</label>
-                                <div className={dataClass}>{solicitud.beneficiario_rif}</div>
-                            </div>
-                        </div>
-
-                        {/* SECCIÓN 2: DATOS DE LA SOLICITUD */}
-                        <div className={sectionTitleClass}>
-                            <span className={badgeClass}>SOLICITUD Y CONCEPTO</span>
-                            <div className="h-px bg-slate-200 flex-1"></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
-                            <div className="md:col-span-2">
-                                <label className={labelClass}>Concepto</label>
-                                <div className={`${dataClass} whitespace-normal`}>{solicitud.concepto}</div>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Método Destino</label>
-                                <div className={dataClass}>{solicitud.tipo_pago}</div>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Datos de Cuenta / Móvil</label>
-                                <div className={dataClass}>
-                                    {solicitud.beneficiario_banco ? `${solicitud.beneficiario_banco} - ` : ''}
-                                    {solicitud.beneficiario_identificador}
+                        {/* SECCIÓN 1: DATOS GENERALES (Resumido en 2 columnas) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            {/* Beneficiario */}
+                            <div className="space-y-3">
+                                <div className={sectionTitleClass}>
+                                    <span className={badgeClass}>BENEFICIARIO</span>
+                                    <div className="h-px bg-slate-200 flex-1"></div>
                                 </div>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Solicitado Por</label>
-                                <div className={dataClass}>{solicitud.solicitante}</div>
-                            </div>
-                        </div>
-
-                        {/* SECCIÓN 3: INFORMACIÓN DEL PAGO */}
-                        <div className={sectionTitleClass}>
-                            <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200">EJECUCIÓN DEL PAGO</span>
-                            <div className="h-px bg-green-200 flex-1"></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-green-50/30 p-4 rounded-xl border border-green-100">
-                            <div>
-                                <label className={labelClass}>Monto Total</label>
-                                <div className="text-lg font-black text-slate-700">{formatMonto(solicitud.monto, solicitud.moneda_pago)}</div>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Total Pagado</label>
-                                <div className="text-lg font-black text-green-600">{formatMonto(solicitud.total_pagado || 0, solicitud.moneda_pago)}</div>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Estatus</label>
-                                <div className={`text-xs font-bold uppercase mt-1 ${solicitud.estado_pago === 1 ? 'text-green-600' : 'text-yellow-600'}`}>
-                                    {solicitud.estado_pago === 1 ? 'PAGADO COMPLETO' : 'ABONADO / PENDIENTE'}
-                                </div>
-                            </div>
-
-                            <div className="md:col-span-1">
-                                <label className={labelClass}>Banco Origen</label>
-                                <div className={dataClass}>{solicitud.banco_origen || '-'}</div>
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className={labelClass}>Referencia(s)</label>
-                                <div className={dataClass}>{solicitud.referencia_pago || '-'}</div>
-                            </div>
-                        </div>
-
-                        {/* COMPROBANTE CON ZOOM */}
-                        {imgUrl ? (
-                            <div className="mt-4">
-                                <label className={labelClass}>Comprobante Adjunto</label>
-                                <div className="border-2 border-dashed border-slate-300 rounded-lg p-2 flex justify-center bg-slate-50 transition-colors hover:bg-slate-100">
-                                    {/* Reemplazamos <a> por un div clickeable */}
-                                    <div 
-                                        onClick={() => setZoomOpen(true)}
-                                        className="relative group cursor-zoom-in"
-                                        title="Clic para ampliar"
-                                    >
-                                        <img 
-                                            src={imgUrl} 
-                                            alt="Comprobante" 
-                                            className="h-64 object-contain rounded shadow-sm group-hover:opacity-90 transition-opacity bg-white" 
-                                            onError={(e) => {
-                                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x150?text=Error+Cargando+Imagen';
-                                            }}
-                                        />
-                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <span className="bg-black/70 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">
-                                                🔍 Ampliar Imagen
-                                            </span>
-                                        </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className={labelClass}>Nombre</label><div className={dataClass}>{solicitud.beneficiario_nombre}</div></div>
+                                    <div><label className={labelClass}>Documento</label><div className={dataClass}>{solicitud.beneficiario_rif}</div></div>
+                                    <div className="col-span-2">
+                                        <label className={labelClass}>Destino ({solicitud.tipo_pago})</label>
+                                        <div className={dataClass}>{solicitud.beneficiario_banco} - {solicitud.beneficiario_identificador}</div>
                                     </div>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="mt-4 p-4 text-center text-slate-400 text-sm border border-slate-100 rounded-lg">
-                                Sin comprobante adjunto
+
+                            {/* Resumen Financiero */}
+                            <div className="space-y-3">
+                                <div className={sectionTitleClass}>
+                                    <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200">ESTADO DE CUENTA</span>
+                                    <div className="h-px bg-green-200 flex-1"></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className={labelClass}>Monto Total</label>
+                                        <div className="text-lg font-black text-slate-700">{formatMonto(solicitud.monto, solicitud.moneda_pago)}</div>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Total Pagado</label>
+                                        <div className="text-lg font-black text-green-600">{formatMonto(solicitud.total_pagado || 0, solicitud.moneda_pago)}</div>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Pendiente</label>
+                                        <div className={`text-base font-bold ${deudaPendiente > 0.01 ? 'text-red-500' : 'text-slate-400'}`}>
+                                            {formatMonto(deudaPendiente, solicitud.moneda_pago)}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Concepto</label>
+                                        <div className="text-xs text-slate-500 italic truncate" title={solicitud.concepto}>{solicitud.concepto}</div>
+                                    </div>
+                                </div>
                             </div>
-                        )}
+                        </div>
+
+                        {/* SECCIÓN 2: HISTORIAL DE PAGOS (LA SOLUCIÓN VISUAL) */}
+                        <div className="mt-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-100">HISTORIAL DE TRANSACCIONES</span>
+                                <div className="h-px bg-blue-100 flex-1"></div>
+                            </div>
+
+                            {historialPagos.length > 0 ? (
+                                <div className="border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
+                                            <tr>
+                                                <th className="px-4 py-2 border-b">Fecha</th>
+                                                <th className="px-4 py-2 border-b">Banco Origen</th>
+                                                <th className="px-4 py-2 border-b">Referencia</th>
+                                                <th className="px-4 py-2 border-b text-right">Monto</th>
+                                                <th className="px-4 py-2 border-b text-center">Comprobante</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {historialPagos.map((pago: any, index: number) => {
+                                                const img = getImagenUrl(pago.comprobante_url || pago.comprobante);
+                                                return (
+                                                    <tr key={index} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="px-4 py-2 text-slate-500 font-mono text-xs">
+                                                            {/* Usamos creado_en de la tabla pagos_historial */}
+                                                            {new Date(pago.creado_en).toLocaleDateString()}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-slate-700 font-medium text-xs">
+                                                            {pago.banco_origen || '-'}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-slate-600 font-mono text-xs">
+                                                            {pago.referencia || pago.referencia_pago || '-'}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-bold text-green-700 text-xs">
+                                                            {formatMonto(pago.monto_pagado, solicitud.moneda_pago)}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-center">
+                                                            {img ? (
+                                                                <button 
+                                                                    onClick={() => setZoomUrl(img)}
+                                                                    className="text-blue-600 hover:text-blue-800 text-[10px] font-bold underline flex items-center justify-center gap-1 mx-auto bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
+                                                                >
+                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                    Ver
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-slate-300 text-[10px] italic">Sin foto</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200 text-xs">
+                                    No hay registros de pagos asociados.
+                                </div>
+                            )}
+                        </div>
+
                     </div>
 
                     {/* Footer */}
@@ -171,25 +186,22 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
             </div>
 
             {/* --- VISOR DE ZOOM (LIGHTBOX) --- */}
-            {zoomOpen && imgUrl && (
+            {zoomUrl && (
                 <div 
-                    className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
-                    onClick={() => setZoomOpen(false)} // Cierra al hacer clic en el fondo
+                    className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+                    onClick={() => setZoomUrl(null)}
                 >
-                    {/* Botón Cerrar Flotante */}
                     <button 
-                        onClick={() => setZoomOpen(false)}
+                        onClick={() => setZoomUrl(null)}
                         className="absolute top-5 right-5 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-all"
                     >
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
-
-                    {/* Imagen Grande */}
                     <img 
-                        src={imgUrl} 
+                        src={zoomUrl} 
                         alt="Comprobante Zoom" 
                         className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                        onClick={(e) => e.stopPropagation()} // Evita cerrar si clickeas la imagen misma
+                        onClick={(e) => e.stopPropagation()} 
                     />
                 </div>
             )}

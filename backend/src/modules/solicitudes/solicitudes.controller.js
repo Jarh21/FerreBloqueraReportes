@@ -171,27 +171,44 @@ export const CrearSolicitud = async (req, res) => {
 export const ObtenerSolicitudes = async (req, res) => {
     try {
         const { empresaId } = req.params;
+        
+        // 1. Obtener las solicitudes principales
+        const [solicitudes] = await pool.query(
+            "SELECT * FROM detalles_solicitudes WHERE empresa_id = ? ORDER BY creado_en DESC", 
+            [empresaId]
+        );
 
-        if (!empresaId) {
-            return res.status(400).json({ message: "Se requiere el ID de la empresa" });
+        if (solicitudes.length === 0) {
+            return res.json([]);
         }
 
-        const query = `
-            SELECT * FROM detalles_solicitudes 
-            WHERE empresa_id = ? 
-            ORDER BY creado_en DESC 
-            LIMIT 500
-        `;
-        
-        const [rows] = await pool.query(query, [empresaId]);
-        res.json(rows);
+        // 2. Extraer los IDs para buscar sus pagos
+        const solicitudIds = solicitudes.map(s => s.id);
+
+        // 3. Buscar el HISTORIAL COMPLETO de pagos para estas solicitudes
+        const [pagos] = await pool.query(
+            `SELECT * FROM pagos_historial WHERE solicitud_id IN (?) ORDER BY creado_en ASC`,
+            [solicitudIds]
+        );
+
+        // 4. Combinar: Metemos el array de 'pagos' dentro de cada 'solicitud'
+        const resultado = solicitudes.map(solicitud => {
+            // Filtramos los pagos que pertenecen a esta solicitud
+            const susPagos = pagos.filter(p => p.solicitud_id === solicitud.id);
+            
+            return {
+                ...solicitud,
+                pagos: susPagos // <--- AQUÍ ESTÁ LA CLAVE. Ahora el frontend recibe la lista.
+            };
+        });
+
+        res.json(resultado);
 
     } catch (error) {
-        console.error("Error obteniendo solicitudes:", error);
-        res.status(500).json({ message: "Error al obtener la lista", error: error.message });
+        console.error(error);
+        res.status(500).json({ message: "Error al obtener solicitudes" });
     }
 };
-
 
 // ----------------------------------------------------
 // BUSCAR BENEFICIARIOS (AUTOCOMPLETE)
@@ -245,6 +262,10 @@ export const ProcesarPago = async (req, res) => {
     try {
         await connection.beginTransaction();
 
+        // Asumiendo que req.user tiene los datos del usuario logueado (gracias al middleware de auth)
+        // Si no tienes req.user.nombre o email, puedes poner 'Sistema' o null
+        const usuarioResponsable = req.user ? (req.user.nombre || req.user.email) : 'Sistema';
+
         const { 
             id_solicitud, 
             banco_origen, 
@@ -252,14 +273,11 @@ export const ProcesarPago = async (req, res) => {
             monto_pagado 
         } = req.body;
 
-        // Manejo del archivo (Comprobante)
-        // Multer deja el archivo en req.file. Guardamos la ruta relativa.
         const comprobanteUrl = req.file ? `/uploads/comprobantes/${req.file.filename}` : null;
 
-        // 1. OBTENER INFORMACIÓN ACTUAL DE LA SOLICITUD
-        // Necesitamos saber cuánto era el monto total y cuánto se lleva pagado
+        // 1. OBTENER INFORMACIÓN ACTUAL (Agregamos 'moneda_pago')
         const [solicitud] = await connection.query(
-            "SELECT monto, total_pagado FROM detalles_solicitudes WHERE id = ?", 
+            "SELECT monto, total_pagado, moneda_pago FROM detalles_solicitudes WHERE id = ?", 
             [id_solicitud]
         );
 
@@ -267,40 +285,47 @@ export const ProcesarPago = async (req, res) => {
             throw new Error("Solicitud no encontrada");
         }
 
-        const montoTotal = parseFloat(solicitud[0].monto);
-        const pagadoPrevio = parseFloat(solicitud[0].total_pagado || 0);
+        const datosSolicitud = solicitud[0]; // Guardamos la info para usarla
+        const montoTotal = parseFloat(datosSolicitud.monto);
+        const pagadoPrevio = parseFloat(datosSolicitud.total_pagado || 0);
         const pagoActual = parseFloat(monto_pagado);
 
         // 2. CALCULAR NUEVO ESTADO
         const nuevoTotalPagado = pagadoPrevio + pagoActual;
         
-        // Lógica de Estado:
-        // Si pagó todo (o más, por decimales) -> 1 (Pagado)
-        // Si pagó menos del total -> 3 (Abonado)
         let nuevoEstado = 0;
+        // Usamos una pequeña tolerancia (0.01) para evitar problemas de redondeo
         if (nuevoTotalPagado >= (montoTotal - 0.01)) { 
             nuevoEstado = 1; // Pagado completo
         } else {
             nuevoEstado = 3; // Abonado / Parcial
         }
 
-        // 3. INSERTAR EN EL HISTORIAL (AUDITORÍA)
+        // 3. INSERTAR EN EL HISTORIAL (ADAPTADO A TU TABLA REAL)
+        // OJO: 'moneda' es NOT NULL en tu tabla, así que la tomamos de la solicitud padre
         await connection.query(`
             INSERT INTO pagos_historial 
-            (solicitud_id, monto_pagado, banco_origen, referencia, comprobante_url)
-            VALUES (?, ?, ?, ?, ?)
-        `, [id_solicitud, pagoActual, banco_origen, referencia, comprobanteUrl]);
+            (solicitud_id, monto_pagado, moneda, banco_origen, referencia, comprobante_url, creado_por)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+            id_solicitud, 
+            pagoActual, 
+            datosSolicitud.moneda_pago, // Insertamos la moneda (VES/USD)
+            banco_origen, 
+            referencia, 
+            comprobanteUrl,
+            usuarioResponsable // Guardamos quién registró el pago
+        ]);
 
         // 4. ACTUALIZAR LA SOLICITUD PRINCIPAL
-        // Actualizamos el acumulado, el estado y ponemos el comprobante más reciente como principal
         await connection.query(`
             UPDATE detalles_solicitudes 
             SET 
                 total_pagado = ?,
                 estado_pago = ?,
-                comprobante_url = ?,     -- Actualizamos la foto principal con la última
-                banco_origen = ?,    -- Actualizamos último banco usado
-                referencia_pago = ?  -- Actualizamos última referencia
+                comprobante_url = ?,  
+                banco_origen = ?,    
+                referencia_pago = ?  
             WHERE id = ?
         `, [nuevoTotalPagado, nuevoEstado, comprobanteUrl, banco_origen, referencia, id_solicitud]);
 

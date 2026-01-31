@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import InputBancosAutocomplete from '../SelectSolicitudes/InputBancosAutocomplete';
 import SelectCuenta from '../../selectoresContables/SelectCuenta';
+import { optionCSS } from 'react-select/dist/declarations/src/components/Option';
 
 interface ModalProcesarPagoProps {
     isOpen: boolean;
@@ -24,11 +25,20 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
     const [modoPago, setModoPago] = useState<'completo' | 'abono'>('completo');
     const [montoAbono, setMontoAbono] = useState<string>('');
 
-    // Cálculos
-    const montoTotal = solicitud ? parseFloat(solicitud.monto || 0) : 0;
+    // --- CÁLCULOS LÓGICOS CORREGIDOS ---
+    const montoTotalOriginal = solicitud ? parseFloat(solicitud.monto || 0) : 0;
+    const pagadoAnteriormente = solicitud ? parseFloat(solicitud.total_pagado || 0) : 0;
+    
+    // 1. Calculamos lo que realmente se debe (Esto soluciona que el monto no se actualizaba)
+    const deudaPendiente = Math.max(0, montoTotalOriginal - pagadoAnteriormente);
+
+    // 2. Definimos cuánto se va a pagar en esta operación
     const montoAbonoNum = parseFloat(montoAbono) || 0;
-    const montoFinal = modoPago === 'completo' ? montoTotal : montoAbonoNum;
-    const restante = Math.max(0, montoTotal - montoFinal);
+    // Si es completo, pagamos la DEUDA PENDIENTE, no el total original
+    const montoFinal = modoPago === 'completo' ? deudaPendiente : montoAbonoNum;
+    
+    // 3. Calculamos cuánto quedará debiendo después de este pago
+    const restante = Math.max(0, deudaPendiente - montoFinal);
 
     useEffect(() => {
         if (isOpen) {
@@ -116,13 +126,15 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
             return;
         }
 
+        if (montoFinal <= 0) {
+            alert("El monto a pagar debe ser mayor a 0.");
+            return;
+        }
+
         if (modoPago === 'abono') {
-            if (montoFinal <= 0) {
-                alert("El monto a abonar debe ser mayor a 0.");
-                return;
-            }
-            if (montoFinal > montoTotal) {
-                alert("El abono no puede ser mayor al monto de la solicitud.");
+            // Validamos contra la deuda pendiente, no contra el total original
+            if (montoFinal > deudaPendiente + 0.01) { 
+                alert("El abono no puede ser mayor a la deuda pendiente.");
                 return;
             }
         }
@@ -134,7 +146,8 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
             referencia: referencia,
             comprobante: comprobante,
             monto_pagado: montoFinal,
-            es_abono: modoPago === 'abono'
+            // Es abono si NO se cubre toda la deuda pendiente
+            es_abono: restante > 0.01 
         };
 
         onProcesar(solicitud.id, datosPago);
@@ -180,9 +193,14 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                 <input value={solicitud.beneficiario_rif || ''} disabled className={inputDisabledClass} />
                             </div>
                             <div>
-                                <label className={labelClass}>Monto Total</label>
+                                {/* AQUÍ ESTÁ EL CAMBIO VISUAL DE VALOR: Mostramos deudaPendiente */}
+                                <label className={labelClass}>Monto {pagadoAnteriormente > 0 ? 'Pendiente' : 'Total'}</label>
                                 <div className="relative">
-                                    <input value={solicitud.monto} disabled className={`${inputDisabledClass} font-mono text-right pr-8`} />
+                                    <input 
+                                        value={deudaPendiente.toFixed(2)} 
+                                        disabled 
+                                        className={`${inputDisabledClass} font-mono text-right pr-8 font-bold text-slate-700`} 
+                                    />
                                     <span className="absolute right-3 top-2 text-xs font-bold text-slate-500">{solicitud.moneda_pago === 'VES' ? 'Bs' : '$'}</span>
                                 </div>
                             </div>
@@ -262,12 +280,11 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
 
                             {/* Banco Origen */}
                             <div>
-                                <label className={labelClass}>Banco de Origen</label>
+                                <label className={labelClass}>Cuenta de Origen</label>
 
-                                <SelectCuenta name="banco_origen" value={bancoOrigen} onChange= {setBancoOrigen} class="w-full hover:cursor-text"/>
+                                <SelectCuenta name="banco_origen" value={bancoOrigen} onChange= {setBancoOrigen} class="w-full hover:cursor-text" />
                                 
-                            {/*        
-                            <InputBancosAutocomplete 
+                            {/* <InputBancosAutocomplete 
                                     name="banco_origen" 
                                     value={bancoOrigen} 
                                     onChange={(e) => setBancoOrigen(e.target.value)} 
@@ -287,6 +304,7 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                     onChange={(e) => setReferencia(e.target.value)}
                                     className={inputActiveClass}
                                     placeholder="Ultimos 6 digitos"
+                                    maxLength={6}
                                     required
                                 />
                             </div>
@@ -319,9 +337,6 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                             </div>
                                         ) : (
                                             <>
-                                                <svg className="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                                                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                                </svg>
                                                 <div className="flex text-sm text-slate-600 justify-center">
                                                     <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500 focus-within:outline-none">
                                                         <span>Subir un archivo</span>
