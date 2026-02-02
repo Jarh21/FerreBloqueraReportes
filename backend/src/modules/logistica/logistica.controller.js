@@ -155,7 +155,8 @@ export const guardarFletesSeleccionados = async (req, res) => {
     
     try {
         const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes,descripcion, tasaCambio, tipoMonedaNacional } = req.body; 
-       
+       console.log("tipoMonedaNacional:", tipoMonedaNacional);
+       console.log("tasa de cambio",tasaCambio);
         if (!empresaId || keycodigos.length === 0 || !contCuenta || !contConcepto || !montoFletes) {
            
             return res.status(400).json({ error: "Faltan parámetros: empresaId, fletes, cuenta contable o monto" });
@@ -163,10 +164,12 @@ export const guardarFletesSeleccionados = async (req, res) => {
         
        //suma de montoFletes
         const sumaMontoFletes = montoFletes.reduce((a, b) => a + b, 0);
-
+        console.log("Suma de montoFletes:", sumaMontoFletes);
         //conseguimos el ultimo comprobante
-        const nuevoComprobante = await nuevoComprobanteFlujoEfectivoSiace(empresaId);        
-        const montoEnMonedaLocal = tipoMonedaNacional === 1 ? sumaMontoFletes : sumaMontoFletes * tasaCambio;
+        const nuevoComprobante = await nuevoComprobanteFlujoEfectivoSiace(empresaId);  
+        
+        const montoEnMonedaLocal =  sumaMontoFletes * tasaCambio;
+        console.log("Monto en moneda local:", montoEnMonedaLocal);
         //insertamos el asiento contable
         const asientoSql = ` INSERT INTO cont_registro 
         (fecha_de_operacion, comprobante, codcuenta, codconcepto, descripcion, 
@@ -177,10 +180,10 @@ export const guardarFletesSeleccionados = async (req, res) => {
         await pool.query(asientoSql, asientoValores);
 
         //guardar en la tabla logistica_fletes_cancelados
-        const valores = keycodigos.map((fleteId, index) => [fleteId, new Date(), contCuenta, contConcepto, montoFletes[index], new Date(), new Date()]);
+        const valores = keycodigos.map((fleteId, index) => [empresaId, fleteId, new Date(), contCuenta, contConcepto, montoFletes[index],montoFletes[index]*tasaCambio, new Date(), new Date()]);
 
         //insertamos los fletes cancelados
-        const sql = `INSERT INTO logistica_fletes_cancelados (id_factura_tipo_logistica, fecha_cancelado,cont_cuenta_id, cont_concepto_id, monto,created_at,updated_at) VALUES ?`;
+        const sql = `INSERT INTO logistica_fletes_cancelados (empresa_id,id_factura_tipo_logistica, fecha_cancelado,cont_cuenta_id, cont_concepto_id, monto,monto_moneda,created_at,updated_at) VALUES ?`;
         await pool.query(sql, [valores]);
         res.json({ mensaje: "Fletes guardados correctamente" });
     } catch (error) {

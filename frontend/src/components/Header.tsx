@@ -58,6 +58,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
               }}
               className="appearance-none bg-slate-50 border border-slate-200 text-slate-700 py-2.5 pl-4 pr-10 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none cursor-pointer font-medium transition-all"
             >
+
               {empresas.map((empresa) => (
                 <option key={empresa.id} value={empresa.id}>
                   🏢 {empresa.nombre}
