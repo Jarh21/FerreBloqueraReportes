@@ -12,17 +12,17 @@ import { authMiddleware, adminMiddleware } from "../middleware/auth.js"
 // Empresas
 import { obtenerEmpresas, obtenerTodasEmpresas, crearEmpresa, actualizarEmpresa, obtenerEmpresasPorUsuario } from "../modules/empresas/empresas.controller.js"
 // Finanzas
-import { obtenerTodosTipoMoneda,obtenerContContable,obtenerFinanzas,crearFinanza,listaAsesores,guardarCuadreArqueoCerrado,exportarAlFlujoEfectivoSiace,obtenerGastosPorFecha,obtenerTasaDiaSiace,obtenerTodoEfectivoDetallado,obtenerTodoEfectivoEgresos,listarArqueosCerrados,obtenerModosPagoDetalle,obtenerDenominaciones,eliminarCuadreArqueoEgreso,guardarDenominacionesCuadre,guardarCuadreArqueoIngreso,obtenerCuadreEfectivoDetallado,eliminarCuadreEfectivoDetallado,sseSubscribeCuadre,obtenerDatosArqueoAsesor,obtenerConceptosContables,guardarCuadreArqueoGasto,obtenerCuadreArqueoEgresos,obtenerSumatoriaModosPagoAsesor,guardarObservacionGeneralCuadreAsesor,obtenerObservacionGeneralCaudreAsesor,listarObservacionesGeneralCuadreAsesor,listarObservacionesGeneralCuadre,editarGastosAsesor,obtenerTotalEfectivoMovPagos,obtenerTotalEfectivoYGastosAgrupadosPorAsesor,eliminarObservacionGeneralCaudreAsesor,buscarFlujoEfectivoSiacePorFecha} from "../modules/finanzas/finanzas.controller.js"
+import { obtenerCatalogoTipoMoneda,obtenerHistorialTasaTipoMoneda,registrarHistorialTasaTipoMoneda,obtenerTodosTipoMoneda,obtenerContContable,obtenerFinanzas,crearFinanza,listaAsesores,guardarCuadreArqueoCerrado,exportarAlFlujoEfectivoSiace,obtenerGastosPorFecha,obtenerTasaDiaSiace,obtenerTodoEfectivoDetallado,obtenerTodoEfectivoEgresos,listarArqueosCerrados,obtenerModosPagoDetalle,obtenerDenominaciones,eliminarCuadreArqueoEgreso,guardarDenominacionesCuadre,guardarCuadreArqueoIngreso,obtenerCuadreEfectivoDetallado,eliminarCuadreEfectivoDetallado,sseSubscribeCuadre,obtenerDatosArqueoAsesor,obtenerConceptosContables,guardarCuadreArqueoGasto,obtenerCuadreArqueoEgresos,obtenerSumatoriaModosPagoAsesor,guardarObservacionGeneralCuadreAsesor,obtenerObservacionGeneralCaudreAsesor,listarObservacionesGeneralCuadreAsesor,listarObservacionesGeneralCuadre,editarGastosAsesor,obtenerTotalEfectivoMovPagos,obtenerTotalEfectivoYGastosAgrupadosPorAsesor,eliminarObservacionGeneralCaudreAsesor,buscarFlujoEfectivoSiacePorFecha} from "../modules/finanzas/finanzas.controller.js"
 // Reportes
 import { obtenerEstadoProveedores, obtenerVentas, obtenerSaldos, totalSaldoEmpresa } from "../modules/reportes/reportes.controller.js"
 // Usuarios
 import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, editarUsuarios, obtenerRoles} from "../modules/usuarios/usuarios.controller.js"
 // Solicitudes - Entidades
 import { ObtenerEntidades} from "../modules/solicitudes/entidades.controller.js"
-
 // Solicitudes - Controller (Agregado ProcesarPago aquí)
 import { CrearSolicitud, ObtenerSolicitudes, BuscarBeneficiarios, ProcesarPago } from "../modules/solicitudes/solicitudes.controller.js";
-
+//chatbot
+import { obtenerRespuestaChatbot } from "../modules/chatbot/chatbot.controller.js";
 // --- CONFIGURACIÓN DE MULTER (CARGA DE IMÁGENES) ---
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -90,6 +90,9 @@ router.get("/finanzas/:empresaId", authMiddleware, obtenerFinanzas)
 router.post("/finanzas/flujo-efectivo-siace", authMiddleware, buscarFlujoEfectivoSiacePorFecha)
 router.get("/finanzas/contable-cuenta/:empresaId",authMiddleware, obtenerContContable)
 router.get("/finanzas/tipo-moneda/:empresaId",authMiddleware, obtenerTodosTipoMoneda)
+router.get("/finanzas/tipo-moneda-catalogo/:empresaId", authMiddleware, obtenerCatalogoTipoMoneda)
+router.get("/finanzas/tipo-moneda-historial/:empresaId", authMiddleware, obtenerHistorialTasaTipoMoneda)
+router.post("/finanzas/tipo-moneda-historial", authMiddleware, registrarHistorialTasaTipoMoneda)
 // ...agrega aquí el resto de rutas de finanzas según tu archivo original
 
 // Reportes
@@ -126,5 +129,8 @@ router.post("/logistica/fletes/detalle-por-vehiculo", authMiddleware, obtenerDet
 
 // Solicitudes - Entidades
 router.get("/solicitudes/entidades",  ObtenerEntidades)
+
+//chatbot
+router.post("/chatbot/obtener-respuesta", authMiddleware, obtenerRespuestaChatbot);
 
 export default router

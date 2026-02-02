@@ -6,10 +6,11 @@ import { buildApiUrl } from '../../config/api';
 import { useAuth } from "../../context/AuthContext";
 
 type SelectCuentaProps = {
-    value: number | null;
-    onChange: (value: number | null, extraData?: any) => void;
+    value: number | string | null;
+    onChange: (value: number | null, label: string | null, codtipomoneda?: any) => void;
     placeholder?: string;
     className?: string;
+   
 };
 
 const SelectCuenta: React.FC<SelectCuentaProps> = ({
@@ -60,11 +61,11 @@ const SelectCuenta: React.FC<SelectCuentaProps> = ({
             placeholder={placeholder}
             onChange={(opt: any) =>{
                 if(!opt){
-                    onChange(null);
+                    onChange(null, null,null);
                 }else{
-                    onChange(opt.value ?? null, opt);
+                    onChange(opt.value ?? null,opt.label ?? null ,opt.codtipomoneda ?? null);
                 }
-            }} //onChange(opt?.value ?? null)}                       
+            }}                      
             options={options}
             value={options.find((opt: any) => opt.value === value) || null}
             className={className}

@@ -68,21 +68,30 @@ export default function Sidebar({ open }: SidebarProps) {
           },
         ]
       : []),
-       ...(validarModulo("Solicitudes")
-      ? [
-          {
-            label: "Solicitudes",
-            href: "#",
-            icon: "🧾",
-            submenu: [
-              { label: "Crear solicitud", href: "/dashboard/solicitudes/crear" },
-              
-              { label: "Estado de solicitudes", href: "/dashboard/solicitudes/consulta" },
-              
-            ],
-          },
-        ]
-      : []),
+    ...(validarModulo("Solicitudes")
+    ? [
+        {
+          label: "Solicitudes",
+          href: "#",
+          icon: "🧾",
+          submenu: [
+            { label: "Crear solicitud", href: "/dashboard/solicitudes/crear" },
+            
+            { label: "Estado de solicitudes", href: "/dashboard/solicitudes/consulta" },
+            
+          ],
+        },
+      ]
+    : []),
+      
+    { 
+      label: "Preguntale a la IA",
+      href: "/dashboard/chatbot/chatbotgpt", 
+      icon: "🤖", 
+      submenu: [] 
+    },
+         
+      
     ...(validarModulo("Configuracion")
       ? [
           {

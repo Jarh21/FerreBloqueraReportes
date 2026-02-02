@@ -7,6 +7,7 @@ import SelectCuenta from "../../../components/selectoresContables/SelectCuenta";
 import RegistrarVehiculo from "../../../components/logistica/RegistrarVehiculo";
 import SelectConcepto from "../../../components/selectoresContables/SelectConcepto";
 import SeleccionarTasa from "../../../components/finanzas/SeleccionarTasa";
+import HistorialDolar from "../../../components/finanzas/HistorialDolar";
 interface FletesProps {
     keycodigo:number;
     fecha: string;
@@ -22,6 +23,7 @@ interface FletesProps {
 interface FleteSeleccionado {
     keycodigo: number;
     total: number;
+  vehiculo: string;
 }
 
 type VehiculoOption = { value: number; label: string };
@@ -35,7 +37,7 @@ const Fletes: React.FC = () => {
     const [descripcion, setDescripcion] = React.useState<string>("PAGO DE FLETES EXTERNOS");
     const [selectedConcepto, setSelectedConcepto] = React.useState<number | null>(58);
     const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);    
-    const [tasaCambio, setTasaCambio] = React.useState<number | ''>('');
+    const [tasaCambio, setTasaCambio] = React.useState<number >(0);
     const [tasaSeleccionadaId, setTasaSeleccionadaId] = React.useState<number | string | null>(null);
     const [formBusquedaFletes, setFormBusquedaFletes] = React.useState<{
       fechaDesde: string;
@@ -105,42 +107,56 @@ const Fletes: React.FC = () => {
     // Estado para checkboxes seleccionados
   
     // Manejar selección de checkboxes
-    const handleCheckboxChange = (keycodigo: number, total: number) => {
-        const totalNum = Number(total) || 0;
-        setFletesSeleccionados(prev => {
-            const yaSeleccionado = prev.some(f => f.keycodigo === keycodigo);
-            return yaSeleccionado
-                ? prev.filter(f => f.keycodigo !== keycodigo)
-                : [...prev, { keycodigo, total: totalNum }];
-        });
+    const handleCheckboxChange = (keycodigo: number, total: number, vehiculo: string) => {
+      const totalNum = Number(total) || 0;
+      setFletesSeleccionados(prev => {
+        const yaSeleccionado = prev.some(f => f.keycodigo === keycodigo);
+        const seleccionActualizada = yaSeleccionado
+          ? prev.filter(f => f.keycodigo !== keycodigo)
+          : [...prev, { keycodigo, total: totalNum, vehiculo }];
+
+        const detalleFletes = seleccionActualizada
+          .map((f) => `${f.vehiculo} SE CANCELO (${Number(f.total).toFixed(2)})`)
+          .filter((v): v is string => Boolean(v));
+
+        const detalleVehiculos = detalleFletes.join(", ");
+        setDescripcion(
+          detalleVehiculos
+            ? `PAGO DE FLETES EXTERNOS - ${detalleVehiculos}`
+            : "PAGO DE FLETES EXTERNOS"
+        );
+
+        return seleccionActualizada;
+      });
     };
 
-        // Enviar fletes seleccionados para Guardar en cont_registro y logistica_fletes_cancelados
-        const handleEnviarSeleccionados = async () => {
-            if (!empresaActual?.id || fletesSeleccionados.length === 0) {
-                alert("Selecciona al menos un flete y asegúrate de tener una empresa activa.");
-                return;
-            }
-            try {
-                const keycodigos = fletesSeleccionados.map(f => f.keycodigo);
-                const montoFletes = fletesSeleccionados.map(f => f.total);
-                await axios.post(buildApiUrl('/logistica/fletes/seleccionados'), {
-                    empresaId: empresaActual.id,
-                    keycodigos,
-                    montoFletes,
-                    contCuenta: selectedCuenta,
-                    contConcepto: selectedConcepto,
-                    descripcion: descripcion,
-                    tasaCambio: tasaCambio,
-                    tipoMonedaNacional: selectedCuentaTipoMoneda,
-                }, { withCredentials: true });
-                alert("Fletes enviados correctamente");
-                setFletesSeleccionados([]);
-                handleBuscarFletesVehiculos(); // Refrescar la lista de fletes
-            } catch (error) {
-                alert("Error al enviar fletes seleccionados");
-            }
-        };
+    // Enviar fletes seleccionados para Guardar en cont_registro y logistica_fletes_cancelados
+    const handleEnviarSeleccionados = async () => {
+        if (!empresaActual?.id || fletesSeleccionados.length === 0) {
+            alert("Selecciona al menos un flete y asegúrate de tener una empresa activa.");
+            return;
+        }
+        try {
+            const keycodigos = fletesSeleccionados.map(f => f.keycodigo);
+            const montoFletes = fletesSeleccionados.map(f => f.total);
+            await axios.post(buildApiUrl('/logistica/fletes/seleccionados'), {
+                empresaId: empresaActual.id,
+                keycodigos,
+                montoFletes,
+                contCuenta: selectedCuenta,
+                contConcepto: selectedConcepto,
+                descripcion: descripcion,
+                tasaCambio: tasaCambio,
+                tipoMonedaNacional: selectedCuentaTipoMoneda,
+            }, { withCredentials: true });
+            alert("Fletes enviados correctamente");
+            setFletesSeleccionados([]);
+            handleBuscarFletesVehiculos(); // Refrescar la lista de fletes
+            setDescripcion("PAGO DE FLETES EXTERNOS");
+        } catch (error) {
+            alert("Error al enviar fletes seleccionados");
+        }
+    };
     const {empresaActual, validarModulo} = useAuth() 
     
     
@@ -216,7 +232,7 @@ const Fletes: React.FC = () => {
       </h2>
       <p className="text-slate-500 text-sm">Consulta, filtrado y despacho de fletes vehiculares</p>
     </div>
-    
+    <HistorialDolar />
     {/* Acción secundaria integrada en el label del filtro abajo, o aquí si prefieres un acceso rápido */}
   </div>
 
@@ -237,8 +253,9 @@ const Fletes: React.FC = () => {
           type="date" 
           onChange={(e) => {
             const nuevoDesde = e.target.value;
-            setFormBusquedaFletes((prev) => ({ ...prev, fechaDesde: nuevoDesde }));
+            setFormBusquedaFletes((prev) => ({ ...prev, fechaDesde: nuevoDesde }));            
             handlelistarVehiculos({ fechaDesde: nuevoDesde, fechaHasta: formBusquedaFletes.fechaHasta });
+            
           }} 
           className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all" 
         />
@@ -349,7 +366,7 @@ const Fletes: React.FC = () => {
                       type="checkbox"
                       className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                       checked={isSelected}
-                      onChange={() => handleCheckboxChange(flete.keycodigo, flete.total)}
+                      onChange={() => handleCheckboxChange(flete.keycodigo, flete.total, flete.vehiculo)}
                     />
                   </td>
                 </tr>
@@ -372,21 +389,15 @@ const Fletes: React.FC = () => {
           </div>
           <div className="flex-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cuenta Destino -tipomoneda: {selectedCuentaTipoMoneda}</label>
-            <SelectCuenta 
+            <SelectCuenta            
                 value={selectedCuenta} 
-                onChange={(value, extraData) => { 
-                    setSelectedCuenta(value); 
-                    if (extraData) {
-                        setSelectedCuentaTipoMoneda(extraData.codtipomoneda);
+                onChange={(value,label ,codtipomoneda) => { 
+                    setSelectedCuenta(value);
+                    setSelectedCuentaTipoMoneda(codtipomoneda);         
                         
-                        // Usamos un pequeño timeout o validación para asegurar que el estado se limpie
-                        const nuevaTasa = extraData.codtipomoneda === 1 ? 5 : 1;
-                        setTasaSeleccionadaId(nuevaTasa);
-                        
-                        // Actualizamos también el valor de la tasa para el envío del formulario
-                        // Necesitas buscar el valor de la tasa 5 o 1 aquí si quieres que el estado 
-                        // 'tasaCambio' del padre se actualice inmediatamente.
-                    }
+                    // Usamos un pequeño timeout o validación para asegurar que el estado se limpie
+                    const nuevaTasa = codtipomoneda === 1 ? 5 : 1;
+                    setTasaSeleccionadaId(nuevaTasa);              
                 }} 
             />
           </div>
@@ -396,7 +407,7 @@ const Fletes: React.FC = () => {
                   value={tasaCambio}
                   selectedId={tasaSeleccionadaId} // Pasamos la "señal"
                   onChange={(valor, origen) => {
-                      setTasaCambio(valor);
+                      setTasaCambio(Number(valor));
                       setTasaSeleccionadaId(origen); // Mantener sincronizado si el usuario cambia manualmente
                   }}
               />

@@ -27,6 +27,8 @@ import BuscarFlujoEfectivo from "./pages/dashboard/finanzas/BuscarFlujoEfectivo"
 import SolicitudesCrear from "./pages/dashboard/solicitudes/crear"
 import ConsultaPagos from "./pages/dashboard/solicitudes/consulta"
 
+import ChatBotGpt from "./pages/dashboard/chatBot/ChatBotGpt"
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -66,7 +68,7 @@ export default function AppRoutes() {
         {/* Solicitudes */}
         <Route path="solicitudes/crear" element={<SolicitudesCrear />} />
         <Route path="solicitudes/consulta" element={<ConsultaPagos />} />
-        
+        <Route path="chatbot/chatbotgpt" element={<ChatBotGpt />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

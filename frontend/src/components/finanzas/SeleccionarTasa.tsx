@@ -36,12 +36,20 @@ const SeleccionarTasa: React.FC<SeleccionarTasaProps> = ({ value, selectedId, on
         if (selectedId && tipoMoneda.length > 0) {
             const moneda = tipoMoneda.find(m => m.keycodigo.toString() === selectedId.toString());
             if (moneda) {
-                setOrigenTasa(moneda.keycodigo.toString());
-                setTasaValor(Number(moneda.valor));
-                // IMPORTANTE: No llamamos a onChange aquí para evitar el bucle infinito
+                const nuevoOrigen = moneda.keycodigo.toString();
+                const nuevoValor = Number(moneda.valor);
+                const cambioOrigen = nuevoOrigen !== origenTasa;
+                const cambioValor = nuevoValor !== tasaValor;
+
+                if (cambioOrigen) setOrigenTasa(nuevoOrigen);
+                if (cambioValor) setTasaValor(nuevoValor);
+
+                if ((cambioOrigen || cambioValor) && onChange) {
+                    onChange(nuevoValor, nuevoOrigen);
+                }
             }
         }
-    }, [selectedId, tipoMoneda]);
+    }, [selectedId, tipoMoneda, origenTasa, tasaValor, onChange]);
 
     // 3. Manejador de cambios del Usuario (Aquí SÍ notificamos al padre)
     const handleManualChange = (nuevaTasaId: string) => {
