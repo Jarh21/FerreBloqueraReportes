@@ -396,7 +396,7 @@ const Fletes: React.FC = () => {
                     setSelectedCuentaTipoMoneda(codtipomoneda);         
                         
                     // Usamos un pequeño timeout o validación para asegurar que el estado se limpie
-                    const nuevaTasa = codtipomoneda === 1 ? 5 : 1;
+                    const nuevaTasa = codtipomoneda === 1 ? 1 : 5;
                     setTasaSeleccionadaId(nuevaTasa);              
                 }} 
             />

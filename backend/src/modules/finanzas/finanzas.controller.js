@@ -661,7 +661,7 @@ export const obtenerTasaDiaSiace = async (req, res) => {
 }
 
 
-export const sseSubscribeCuadre = async (req, res) => {
+/* export const sseSubscribeCuadre = async (req, res) => {
   try {
     const { empresaId, codusua } = req.params
     if (!empresaId || !codusua) return res.status(400).json({ error: 'Faltan params' })
@@ -682,7 +682,7 @@ export const sseSubscribeCuadre = async (req, res) => {
   } catch (error) {
     console.error(error)
   }
-}
+} */
 
 export const obtenerDatosArqueoAsesor = async (req, res) => {
   try {
@@ -1243,7 +1243,7 @@ export const registrarHistorialTasaTipoMoneda = async (req, res) => {
 
     const precioAnteriorMonto = monedaRows[0].precio_venta_moneda_nacional ?? 0
     const precioAnteriorFecha = monedaRows[0].precio_actual_fecha ?? null
-
+    //ACTUALIZAMOS LA TASA EN LA TABLA TIPO_MONEDA
     await pool.query(
       `UPDATE tipo_moneda
        SET precio_anterior_monto = ?,
@@ -1253,7 +1253,13 @@ export const registrarHistorialTasaTipoMoneda = async (req, res) => {
        WHERE keycodigo = ?`,
       [precioAnteriorMonto, precioAnteriorFecha, tasa, tipoMonedaId]
     )
-
+    //ACTUALIZAMOS TIPO DE TASA CAMBIARIA
+    await pool.query(
+     `UPDATE tipo_tasa_cambiaria 
+      SET monto_moneda_nacional =?, updated_at = NOW() 
+      WHERE tipo_moneda_id=?`,
+      [tasa,tipoMonedaId])
+    //INSERTAMOS EN EL HISTORIAL DE TASAS
     const codusua = req.session?.userId ?? null
     await pool.query(
       `INSERT INTO tipo_moneda_historial_tasa (fecha, tipo_moneda_id, tasa_de_cambio, codusua, created_at)
@@ -1267,3 +1273,6 @@ export const registrarHistorialTasaTipoMoneda = async (req, res) => {
     res.status(500).json({ error: 'Error al registrar la tasa' })
   }
 }
+
+
+

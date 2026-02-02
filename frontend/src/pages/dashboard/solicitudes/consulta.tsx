@@ -62,7 +62,9 @@ const ConsultaPagos: React.FC = () => {
   };
 
   // --- MANEJO DE FILTROS ---
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+      e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement> | { target: { name: string; value: string } }
+  ) => {
       setFiltros({
           ...filtros,
           [e.target.name]: e.target.value
@@ -211,7 +213,7 @@ const ConsultaPagos: React.FC = () => {
                 <label className={labelFilterClass}>Beneficiario / RIF</label>
                 
                 <InputBeneficiarioAutocomplete 
-                    className={inputFilterClass}
+                    className={`${inputFilterClass} w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:left-15 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}
                     disabled={loading}
                     
                     // LÓGICA DE INTEGRACIÓN:
@@ -223,7 +225,7 @@ const ConsultaPagos: React.FC = () => {
                             beneficiario: item.nombre // Guardamos el nombre para que el filtro de texto funcione
                         }));
                     }}
-                className={`w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:left-15 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}/>
+               />
                 
                 {/* Nota visual: Como el componente 'InputBeneficiarioAutocomplete' maneja su propio estado interno 'query',
                     al dar clic en "Limpiar Filtros", el texto visual dentro del input no se borrará automáticamente 

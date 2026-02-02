@@ -45,15 +45,13 @@ interface ObservacionGeneralCuadreRow {
 }
 const Arqueo: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
-    const { empresaId, date } = useParams<Params>();
+    const { date } = useParams<Params>();
     const { empresaActual,usuario } = useAuth()
     const[asesores, setAsesores]= useState([]);
     const[tiposPago, setTiposPago]= useState<TipoPago[]>([]);
     const[montos, setMontos]= useState<Record<number, number>>({})
-    const[selectedAsesor, setSelectedAsesor]= useState<string | null>(null)
-    const[arqueoRegistros, setArqueoRegistros]= useState<any[]>([])
-    const[tasaHoy, setTasaHoy]= useState<number>(0.00)
-    const[tasaPorTipo, setTasaPorTipo]= useState<Record<number, number>>({})
+    const[selectedAsesor, setSelectedAsesor]= useState<string | null>(null)    
+    const[tasaHoy, setTasaHoy]= useState<number>(0.00)    
     const[conceptos, setConceptos]= useState<any[]>([])
     const[egresos, setEgresos]= useState<any[]>([])
     const[gastoForm, setGastoForm]= useState<{ contConcepto: string; descripcion: string; tipoPagoId: number; debito: number }>({ contConcepto: '', descripcion: '', tipoPagoId: 0, debito: 0 })

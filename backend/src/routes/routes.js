@@ -12,7 +12,7 @@ import { authMiddleware, adminMiddleware } from "../middleware/auth.js"
 // Empresas
 import { obtenerEmpresas, obtenerTodasEmpresas, crearEmpresa, actualizarEmpresa, obtenerEmpresasPorUsuario } from "../modules/empresas/empresas.controller.js"
 // Finanzas
-import { obtenerCatalogoTipoMoneda,obtenerHistorialTasaTipoMoneda,registrarHistorialTasaTipoMoneda,obtenerTodosTipoMoneda,obtenerContContable,obtenerFinanzas,crearFinanza,listaAsesores,guardarCuadreArqueoCerrado,exportarAlFlujoEfectivoSiace,obtenerGastosPorFecha,obtenerTasaDiaSiace,obtenerTodoEfectivoDetallado,obtenerTodoEfectivoEgresos,listarArqueosCerrados,obtenerModosPagoDetalle,obtenerDenominaciones,eliminarCuadreArqueoEgreso,guardarDenominacionesCuadre,guardarCuadreArqueoIngreso,obtenerCuadreEfectivoDetallado,eliminarCuadreEfectivoDetallado,sseSubscribeCuadre,obtenerDatosArqueoAsesor,obtenerConceptosContables,guardarCuadreArqueoGasto,obtenerCuadreArqueoEgresos,obtenerSumatoriaModosPagoAsesor,guardarObservacionGeneralCuadreAsesor,obtenerObservacionGeneralCaudreAsesor,listarObservacionesGeneralCuadreAsesor,listarObservacionesGeneralCuadre,editarGastosAsesor,obtenerTotalEfectivoMovPagos,obtenerTotalEfectivoYGastosAgrupadosPorAsesor,eliminarObservacionGeneralCaudreAsesor,buscarFlujoEfectivoSiacePorFecha} from "../modules/finanzas/finanzas.controller.js"
+import {obtenerCatalogoTipoMoneda,obtenerHistorialTasaTipoMoneda,registrarHistorialTasaTipoMoneda,obtenerTodosTipoMoneda,obtenerContContable,obtenerFinanzas,crearFinanza,listaAsesores,guardarCuadreArqueoCerrado,exportarAlFlujoEfectivoSiace,obtenerGastosPorFecha,obtenerTasaDiaSiace,obtenerTodoEfectivoDetallado,obtenerTodoEfectivoEgresos,listarArqueosCerrados,obtenerModosPagoDetalle,obtenerDenominaciones,eliminarCuadreArqueoEgreso,guardarDenominacionesCuadre,guardarCuadreArqueoIngreso,obtenerCuadreEfectivoDetallado,eliminarCuadreEfectivoDetallado,obtenerDatosArqueoAsesor,obtenerConceptosContables,guardarCuadreArqueoGasto,obtenerCuadreArqueoEgresos,obtenerSumatoriaModosPagoAsesor,guardarObservacionGeneralCuadreAsesor,obtenerObservacionGeneralCaudreAsesor,listarObservacionesGeneralCuadreAsesor,listarObservacionesGeneralCuadre,editarGastosAsesor,obtenerTotalEfectivoMovPagos,obtenerTotalEfectivoYGastosAgrupadosPorAsesor,eliminarObservacionGeneralCaudreAsesor,buscarFlujoEfectivoSiacePorFecha} from "../modules/finanzas/finanzas.controller.js"
 // Reportes
 import { obtenerEstadoProveedores, obtenerVentas, obtenerSaldos, totalSaldoEmpresa } from "../modules/reportes/reportes.controller.js"
 // Usuarios
@@ -64,7 +64,7 @@ router.post("/finanzas/cuadre-arqueo-ingreso", authMiddleware, guardarCuadreArqu
 router.get("/finanzas/cuadre-efectivo-detallado/:codusua", authMiddleware, obtenerCuadreEfectivoDetallado)
 router.delete("/finanzas/cuadre-efectivo-detallado/:id", authMiddleware, eliminarCuadreEfectivoDetallado)
 // ... Resto de rutas de finanzas restauradas del corte ...
-router.get("/finanzas/cuadre-stream/:empresaId/:codusua", authMiddleware, sseSubscribeCuadre)
+//router.get("/finanzas/cuadre-stream/:empresaId/:codusua", authMiddleware, sseSubscribeCuadre)
 router.get("/finanzas/datos-arqueo-asesor/:empresaId/:fecha/:codusua", authMiddleware, obtenerDatosArqueoAsesor)
 router.get("/finanzas/conceptos-contables/:empresaId", authMiddleware, obtenerConceptosContables)
 router.post("/finanzas/cuadre-arqueo-gasto", authMiddleware, guardarCuadreArqueoGasto)
@@ -93,6 +93,7 @@ router.get("/finanzas/tipo-moneda/:empresaId",authMiddleware, obtenerTodosTipoMo
 router.get("/finanzas/tipo-moneda-catalogo/:empresaId", authMiddleware, obtenerCatalogoTipoMoneda)
 router.get("/finanzas/tipo-moneda-historial/:empresaId", authMiddleware, obtenerHistorialTasaTipoMoneda)
 router.post("/finanzas/tipo-moneda-historial", authMiddleware, registrarHistorialTasaTipoMoneda)
+
 // ...agrega aquí el resto de rutas de finanzas según tu archivo original
 
 // Reportes
