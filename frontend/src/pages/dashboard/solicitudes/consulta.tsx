@@ -2,17 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from "../../../context/AuthContext";
 import { buildApiUrl } from '../../../config/api';
 import axios from 'axios';
+import InputBancosAutocomplete from '../../../components/solicitudes/SelectSolicitudes/InputBancosAutocomplete';
+import InputBeneficiarioAutocomplete from '../../../components/solicitudes/SelectSolicitudes/InputBeneficiarioAutocomplete';
 
-// IMPORTAMOS SOLO LA MODAL DE LECTURA
+// MODAL DE LECTURA
 import ModalDetalleSolicitud from '../../../components/solicitudes/Modales/ModalDetalleSolicitud';
+
+// IMPORTA AQUÍ TUS COMPONENTES SELECT SI LOS TIENES (Opcional por ahora)
+// import SelectCuenta from '../SelectSolicitudes/SelectCuenta'; 
 
 const ConsultaPagos: React.FC = () => {
   const { empresaActual } = useAuth();
   
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [solicitudes, setSolicitudes] = useState<any[]>([]); // Data original
-  const [solicitudesFiltradas, setSolicitudesFiltradas] = useState<any[]>([]); // Data para mostrar
+  const [solicitudes, setSolicitudes] = useState<any[]>([]); // Toda la data
+  const [solicitudesFiltradas, setSolicitudesFiltradas] = useState<any[]>([]); // Data visible
 
   // Estado para Modal DETALLES
   const [isDetalleOpen, setIsDetalleOpen] = useState(false);
@@ -23,9 +28,8 @@ const ConsultaPagos: React.FC = () => {
       fechaInicio: '',
       fechaFin: '',
       beneficiario: '',
-      cuentaContable: '',
-      empresa: '',
-      usuario: '',
+      metodoPago: '', // Cambié 'cuentaContable' por metodoPago para simplificar filtro visual
+      estatus: '',    // Nuevo filtro útil
       bancoOrigen: ''
   });
   
@@ -41,27 +45,23 @@ const ConsultaPagos: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      // Aquí podrías cambiar el endpoint si tienes uno específico de búsqueda avanzada
       const endpoint = `/solicitudes/listar/${empresaActual.id}`; 
       const response = await axios.get(buildApiUrl(endpoint), {
         withCredentials: true,
-        headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       const data = Array.isArray(response.data) ? response.data : (response.data?.rows ?? []);
       setSolicitudes(data);
-      setSolicitudesFiltradas(data); // Inicialmente mostramos todo
+      setSolicitudesFiltradas(data); 
     } catch (err: any) {
-      console.error("Error fetching solicitudes:", err);
-      const msg = err?.response?.data?.error || err.message || 'Error al obtener solicitudes';
-      setError(msg);
+      console.error("Error fetching:", err);
+      setError("Error al cargar el historial de pagos.");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- MANEJO DE FILTROS (VISUAL POR AHORA) ---
+  // --- MANEJO DE FILTROS ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setFiltros({
           ...filtros,
@@ -70,19 +70,49 @@ const ConsultaPagos: React.FC = () => {
   };
 
   const handleBuscar = () => {
-      // Aquí implementas la lógica de filtrado (Local o Backend)
-      // Ejemplo de filtrado local simple:
-      let filtrado = [...solicitudes];
+      let resultado = [...solicitudes];
 
-      if(filtros.beneficiario) {
-          filtrado = filtrado.filter(s => s.beneficiario_nombre.toLowerCase().includes(filtros.beneficiario.toLowerCase()));
+      // 1. Filtro por Rango de Fechas
+      if (filtros.fechaInicio) {
+          const inicio = new Date(filtros.fechaInicio);
+          inicio.setHours(0, 0, 0, 0); // Ajustar al inicio del día
+          resultado = resultado.filter(s => new Date(s.creado_en) >= inicio);
       }
-      if(filtros.fechaInicio) {
-          filtrado = filtrado.filter(s => new Date(s.creado_en) >= new Date(filtros.fechaInicio));
+      if (filtros.fechaFin) {
+          const fin = new Date(filtros.fechaFin);
+          fin.setHours(23, 59, 59, 999); // Ajustar al final del día
+          resultado = resultado.filter(s => new Date(s.creado_en) <= fin);
       }
-      // ... agregar resto de lógica de filtros aquí
-      
-      setSolicitudesFiltradas(filtrado);
+
+      // 2. Filtro por Beneficiario (Texto)
+      if (filtros.beneficiario) {
+          const termino = filtros.beneficiario.toLowerCase();
+          resultado = resultado.filter(s => 
+              s.beneficiario_nombre.toLowerCase().includes(termino) || 
+              s.beneficiario_rif.toLowerCase().includes(termino)
+          );
+      }
+
+      // 3. Filtro por Método de Pago (Tipo)
+      if (filtros.metodoPago) {
+          resultado = resultado.filter(s => s.tipo_pago === filtros.metodoPago);
+      }
+
+      // 4. Filtro por Banco de Origen
+      if (filtros.bancoOrigen) {
+          // Asumimos que banco_origen guarda el nombre del banco
+          resultado = resultado.filter(s => 
+              s.banco_origen && s.banco_origen.toLowerCase().includes(filtros.bancoOrigen.toLowerCase())
+          );
+      }
+
+      // 5. Filtro por Estatus
+      if (filtros.estatus) {
+          const estatusNum = parseInt(filtros.estatus);
+          resultado = resultado.filter(s => s.estado_pago === estatusNum);
+      }
+
+      setSolicitudesFiltradas(resultado);
   };
 
   const handleLimpiarFiltros = () => {
@@ -90,9 +120,8 @@ const ConsultaPagos: React.FC = () => {
           fechaInicio: '',
           fechaFin: '',
           beneficiario: '',
-          cuentaContable: '',
-          empresa: '',
-          usuario: '',
+          metodoPago: '',
+          estatus: '',
           bancoOrigen: ''
       });
       setSolicitudesFiltradas(solicitudes);
@@ -102,20 +131,28 @@ const ConsultaPagos: React.FC = () => {
   const handleExportarCSV = () => {
       if (solicitudesFiltradas.length === 0) return;
 
-      const headers = ["ID", "Fecha", "Beneficiario", "RIF", "Concepto", "Monto", "Moneda", "Estatus", "Banco Origen", "Referencia"];
+      const headers = ["ID", "Fecha", "Beneficiario", "RIF", "Metodo", "Concepto", "Monto", "Moneda", "Estatus", "Banco Origen", "Referencia"];
       
-      const rows = solicitudesFiltradas.map(sol => [
-          sol.id,
-          new Date(sol.creado_en).toLocaleDateString(),
-          sol.beneficiario_nombre,
-          sol.beneficiario_rif,
-          `"${sol.concepto}"`, // Escapar comillas
-          sol.monto,
-          sol.moneda_pago,
-          sol.estado_pago === 1 ? 'Pagado' : (sol.estado_pago === 3 ? 'Abonado' : 'Pendiente'),
-          sol.banco_origen || '-',
-          sol.referencia_pago || '-'
-      ]);
+      const rows = solicitudesFiltradas.map(sol => {
+          let estatusTexto = 'Pendiente';
+          if(sol.estado_pago === 1) estatusTexto = 'Pagado';
+          else if(sol.estado_pago === 2) estatusTexto = 'Anulado';
+          else if(sol.estado_pago === 3) estatusTexto = 'Abonado';
+
+          return [
+            sol.id,
+            new Date(sol.creado_en).toLocaleDateString(),
+            `"${sol.beneficiario_nombre}"`,
+            sol.beneficiario_rif,
+            sol.tipo_pago,
+            `"${sol.concepto}"`, 
+            sol.monto,
+            sol.moneda_pago,
+            estatusTexto,
+            sol.banco_origen || '-',
+            sol.referencia_pago || '-'
+          ];
+      });
 
       const csvContent = "data:text/csv;charset=utf-8," 
           + headers.join(",") + "\n" 
@@ -150,7 +187,6 @@ const ConsultaPagos: React.FC = () => {
       }
   }
 
-  // Estilos comunes para inputs de filtro
   const inputFilterClass = "w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 focus:ring-2 focus:ring-slate-400 outline-none transition-all";
   const labelFilterClass = "text-[10px] font-bold text-slate-500 uppercase mb-1 block";
 
@@ -159,9 +195,9 @@ const ConsultaPagos: React.FC = () => {
       
       {/* ---------------- SECCIÓN DE FILTROS ---------------- */}
       <div className="p-6 bg-white rounded-xl shadow-lg border border-slate-200">
-        <h3 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Filtros de Búsqueda</h3>
+        <h3 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Consulta Histórica y Reportes</h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             {/* Fila 1 */}
             <div>
                 <label className={labelFilterClass}>Fecha Inicio</label>
@@ -171,59 +207,75 @@ const ConsultaPagos: React.FC = () => {
                 <label className={labelFilterClass}>Fecha Fin</label>
                 <input type="date" name="fechaFin" value={filtros.fechaFin} onChange={handleInputChange} className={inputFilterClass} />
             </div>
-            <div>
-                <label className={labelFilterClass}>Beneficiario</label>
-                <input type="text" name="beneficiario" placeholder="Buscar beneficiario..." value={filtros.beneficiario} onChange={handleInputChange} className={inputFilterClass} />
+           <div className="md:col-span-2">
+                <label className={labelFilterClass}>Beneficiario / RIF</label>
+                
+                <InputBeneficiarioAutocomplete 
+                    className={inputFilterClass}
+                    disabled={loading}
+                    
+                    // LÓGICA DE INTEGRACIÓN:
+                    onSelect={(item) => {
+                        // 1. Recibimos el objeto completo del hijo (item)
+                        // 2. Extraemos el nombre (o RIF) y actualizamos el estado de filtros
+                        setFiltros(prev => ({
+                            ...prev,
+                            beneficiario: item.nombre // Guardamos el nombre para que el filtro de texto funcione
+                        }));
+                    }}
+                className={`w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:left-15 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}/>
+                
+                {/* Nota visual: Como el componente 'InputBeneficiarioAutocomplete' maneja su propio estado interno 'query',
+                    al dar clic en "Limpiar Filtros", el texto visual dentro del input no se borrará automáticamente 
+                    a menos que modifiquemos el componente hijo. Pero la lógica de filtrado funcionará correctamente. */}
             </div>
 
             {/* Fila 2 */}
             <div>
-                <label className={labelFilterClass}>Cuenta Contable</label>
-                <select name="cuentaContable" value={filtros.cuentaContable} onChange={handleInputChange} className={inputFilterClass}>
-                    <option value="">Todas las cuentas</option>
-                    {/* Aquí mapearías tus cuentas contables */}
+                <label className={labelFilterClass}>Método Pago</label>
+                <select name="metodoPago" value={filtros.metodoPago} onChange={handleInputChange} className={inputFilterClass}>
+                    <option value="">Todos</option>
+                    <option value="ZELLE">Zelle</option>
+                    <option value="PAGO MOVIL">Pago Móvil</option>
+                    <option value="TRANSFERENCIA">Transferencia</option>
+                    <option value="EFECTIVO USD">Efectivo USD</option>
+                    <option value="BINANCE">Binance</option>
                 </select>
             </div>
             <div>
-                <label className={labelFilterClass}>Empresa</label>
-                <select name="empresa" value={filtros.empresa} onChange={handleInputChange} className={inputFilterClass}>
-                    <option value="">Seleccionar empresa</option>
-                    {/* Aquí mapearías tus empresas */}
+                <label className={labelFilterClass}>Estatus</label>
+                <select name="estatus" value={filtros.estatus} onChange={handleInputChange} className={inputFilterClass}>
+                    <option value="">Todos</option>
+                    <option value="1">Pagados</option>
+                    <option value="0">Pendientes</option>
+                    <option value="3">Abonados</option>
+                    <option value="2">Anulados</option>
                 </select>
             </div>
-            <div>
-                <label className={labelFilterClass}>Usuario</label>
-                <select name="usuario" value={filtros.usuario} onChange={handleInputChange} className={inputFilterClass}>
-                    <option value="">Seleccionar usuario</option>
-                    {/* Aquí mapearías tus usuarios */}
-                </select>
-            </div>
-
-             {/* Fila 3 */}
-             <div>
-                <label className={labelFilterClass}>Banco de Origen</label>
-                <select name="bancoOrigen" value={filtros.bancoOrigen} onChange={handleInputChange} className={inputFilterClass}>
-                    <option value="">Seleccionar banco</option>
-                    {/* Aquí mapearías tus bancos */}
-                </select>
+             
+             {/* Fila 3: Banco (Input texto simple por ahora) */}
+             <div className="md:col-span-2">
+                <label className={labelFilterClass}>Banco de Origen (Nombre)</label>
+                <InputBancosAutocomplete name="bancoOrigen" value={filtros.bancoOrigen} onChange={handleInputChange} className={inputFilterClass} />
+              
             </div>
         </div>
 
         {/* Botones de Acción Filtros */}
-        <div className="flex justify-between items-center pt-2 border-t border-slate-100 mt-2">
+        <div className="flex justify-between items-center pt-3 border-t border-slate-100">
             <div className="flex gap-2">
                 <button onClick={handleBuscar} className="bg-slate-900 text-white px-5 py-2 rounded-lg text-xs font-bold hover:bg-black transition-colors flex items-center gap-2">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    Buscar
+                    Filtrar Resultados
                 </button>
                 <button onClick={handleLimpiarFiltros} className="bg-white text-slate-600 border border-slate-200 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors">
-                    Limpiar Filtros
+                    Limpiar
                 </button>
             </div>
 
-            <button onClick={handleExportarCSV} className="bg-white text-green-700 border border-green-200 px-4 py-2 rounded-lg text-xs font-bold hover:bg-green-50 transition-colors flex items-center gap-2 shadow-sm">
+            <button onClick={handleExportarCSV} className="bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors flex items-center gap-2 shadow-sm">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Exportar CSV
+                Exportar Vista a CSV
             </button>
         </div>
       </div>
@@ -234,87 +286,91 @@ const ConsultaPagos: React.FC = () => {
         {/* Loading & Error */}
         {loading && (
             <div className="flex items-center justify-center py-10 gap-3 text-slate-500">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-700"></div>
-            <span className="font-medium">Cargando datos...</span>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-700"></div>
+                <span className="font-medium">Cargando historial...</span>
             </div>
         )}
         
         {error && (
             <div className="p-4 bg-red-50 border-l-4 border-red-700 text-red-800 rounded-r-lg mb-6 flex items-center gap-2">
-            <span className="font-semibold text-sm">{error}</span>
+                <span className="font-semibold text-sm">{error}</span>
             </div>
         )}
 
         {/* Tabla */}
         {!loading && !error && (
             solicitudesFiltradas.length > 0 ? (
-                <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-                <table className="min-w-full text-xs text-left">
-                    <thead className="bg-slate-100 text-slate-600 border-b border-slate-200">
-                    <tr>
-                        <th className="px-4 py-3 font-bold uppercase tracking-wider">Fecha / ID</th>
-                        <th className="px-4 py-3 font-bold uppercase tracking-wider">Beneficiario</th>
-                        <th className="px-4 py-3 font-bold uppercase tracking-wider">Método Destino</th>
-                        <th className="px-4 py-3 font-bold uppercase tracking-wider">Concepto</th>
-                        <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">Monto</th>
-                        <th className="px-4 py-3 font-bold uppercase tracking-wider text-center">Estatus</th>
-                        <th className="px-4 py-3 font-bold uppercase tracking-wider text-center">Acciones</th>
-                    </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 bg-white">
-                    {solicitudesFiltradas.map((sol, index) => {
-                        const esAnulado = sol.estado_pago === 2;
-                        
-                        return (
-                            <tr key={index} className={`hover:bg-slate-50 transition-colors ${esAnulado ? 'opacity-50 bg-slate-50' : ''}`}>
-                            <td className="px-4 py-3 text-slate-500 font-medium whitespace-nowrap">
-                                <div className="font-bold text-slate-700">{formatoFecha(sol.creado_en)}</div>
-                                <div className="text-[10px] text-slate-400 font-mono">#{sol.id}</div>
-                            </td>
-                            <td className="px-4 py-3">
-                                <div className="font-bold text-slate-700">{sol.beneficiario_nombre}</div>
-                                <div className="text-[10px] text-slate-400 font-mono">RIF: {sol.beneficiario_rif}</div>
-                            </td>
-                            <td className="px-4 py-3">
-                                <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200 mb-1">
-                                    {sol.tipo_pago}
-                                </span>
-                                <div className="text-[10px] text-slate-500 font-mono truncate max-w-[150px]" title={sol.beneficiario_identificador}>
-                                    {sol.beneficiario_banco ? `${sol.beneficiario_banco} - ` : ''}
-                                    {sol.beneficiario_identificador}
-                                </div>
-                            </td>
-                            <td className="px-4 py-3 max-w-xs whitespace-normal">
-                                <div className="text-slate-600 italic">"{sol.concepto}"</div>
-                            </td>
-                            <td className="px-4 py-3 text-right font-mono">
-                                <div className="font-bold text-slate-700 text-sm">
-                                    {Number(sol.monto).toFixed(2)} {sol.moneda_pago === 'VES' ? 'Bs' : '$'}
-                                </div>
-                                {sol.total_pagado > 0 && sol.total_pagado < sol.monto && (
-                                    <div className="text-[9px] text-blue-600 font-bold">Abonado: {Number(sol.total_pagado).toFixed(2)}</div>
-                                )}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                                {getStatusBadge(sol.estado_pago)}
-                            </td>
+                <>
+                    <div className="mb-2 text-xs text-slate-400 text-right font-mono">
+                        Mostrando {solicitudesFiltradas.length} registros
+                    </div>
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                    <table className="min-w-full text-xs text-left">
+                        <thead className="bg-slate-100 text-slate-600 border-b border-slate-200">
+                        <tr>
+                            <th className="px-4 py-3 font-bold uppercase tracking-wider">Fecha / ID</th>
+                            <th className="px-4 py-3 font-bold uppercase tracking-wider">Beneficiario</th>
+                            <th className="px-4 py-3 font-bold uppercase tracking-wider">Método Destino</th>
+                            <th className="px-4 py-3 font-bold uppercase tracking-wider">Concepto</th>
+                            <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">Monto</th>
+                            <th className="px-4 py-3 font-bold uppercase tracking-wider text-center">Estatus</th>
+                            <th className="px-4 py-3 font-bold uppercase tracking-wider text-center">Acciones</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 bg-white">
+                        {solicitudesFiltradas.map((sol, index) => {
+                            const esAnulado = sol.estado_pago === 2;
+                            return (
+                                <tr key={index} className={`hover:bg-slate-50 transition-colors ${esAnulado ? 'opacity-50 bg-slate-50' : ''}`}>
+                                <td className="px-4 py-3 text-slate-500 font-medium whitespace-nowrap">
+                                    <div className="font-bold text-slate-700">{formatoFecha(sol.creado_en)}</div>
+                                    <div className="text-[10px] text-slate-400 font-mono">#{sol.id}</div>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <div className="font-bold text-slate-700">{sol.beneficiario_nombre}</div>
+                                    <div className="text-[10px] text-slate-400 font-mono">RIF: {sol.beneficiario_rif}</div>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200 mb-1">
+                                        {sol.tipo_pago}
+                                    </span>
+                                    <div className="text-[10px] text-slate-500 font-mono truncate max-w-[150px]" title={sol.beneficiario_identificador}>
+                                        {sol.beneficiario_banco ? `${sol.beneficiario_banco} - ` : ''}
+                                        {sol.beneficiario_identificador}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-3 max-w-xs whitespace-normal">
+                                    <div className="text-slate-600 italic">"{sol.concepto}"</div>
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                    <div className="font-bold text-slate-700 text-sm">
+                                        {Number(sol.monto).toFixed(2)} {sol.moneda_pago === 'VES' ? 'Bs' : '$'}
+                                    </div>
+                                    {sol.total_pagado > 0 && sol.total_pagado < sol.monto && (
+                                        <div className="text-[9px] text-blue-600 font-bold">Abonado: {Number(sol.total_pagado).toFixed(2)}</div>
+                                    )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                    {getStatusBadge(sol.estado_pago)}
+                                </td>
 
-                            {/* COLUMNA DE ACCIONES: SOLO DETALLES */}
-                            <td className="px-4 py-3 text-center">
-                                <button 
-                                    onClick={() => abrirDetalles(sol)}
-                                    className="bg-blue-600 text-white p-1.5 rounded-md hover:bg-blue-700 shadow-sm transition-all text-xs font-bold px-3"
-                                    title="Ver Detalles y Comprobante"
-                                >
-                                    Detalles
-                                </button>
-                            </td>
-                            </tr>
-                        );
-                    })}
-                    </tbody>
-                </table>
-                </div>
+                                {/* COLUMNA DE ACCIONES: SOLO DETALLES */}
+                                <td className="px-4 py-3 text-center">
+                                    <button 
+                                        onClick={() => abrirDetalles(sol)}
+                                        className="bg-blue-600 text-white p-1.5 rounded-md hover:bg-blue-700 shadow-sm transition-all text-xs font-bold px-3"
+                                        title="Ver Detalles y Comprobante"
+                                    >
+                                        Detalles
+                                    </button>
+                                </td>
+                                </tr>
+                            );
+                        })}
+                        </tbody>
+                    </table>
+                    </div>
+                </>
             ) : (
                 <div className="py-20 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
                     <div className="text-slate-300 mb-3">
