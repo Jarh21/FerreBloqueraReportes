@@ -8,16 +8,13 @@ import InputBeneficiarioAutocomplete from '../../../components/solicitudes/Selec
 // MODAL DE LECTURA
 import ModalDetalleSolicitud from '../../../components/solicitudes/Modales/ModalDetalleSolicitud';
 
-// IMPORTA AQUÍ TUS COMPONENTES SELECT SI LOS TIENES (Opcional por ahora)
-// import SelectCuenta from '../SelectSolicitudes/SelectCuenta'; 
-
 const ConsultaPagos: React.FC = () => {
   const { empresaActual } = useAuth();
   
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [solicitudes, setSolicitudes] = useState<any[]>([]); // Toda la data
-  const [solicitudesFiltradas, setSolicitudesFiltradas] = useState<any[]>([]); // Data visible
+  const [solicitudes, setSolicitudes] = useState<any[]>([]); // Toda la data (o la data filtrada por fecha del server)
+  const [solicitudesFiltradas, setSolicitudesFiltradas] = useState<any[]>([]); // Data visible en tabla
 
   // Estado para Modal DETALLES
   const [isDetalleOpen, setIsDetalleOpen] = useState(false);
@@ -28,40 +25,58 @@ const ConsultaPagos: React.FC = () => {
       fechaInicio: '',
       fechaFin: '',
       beneficiario: '',
-      metodoPago: '', // Cambié 'cuentaContable' por metodoPago para simplificar filtro visual
-      estatus: '',    // Nuevo filtro útil
+      metodoPago: '', 
+      estatus: '',    
       bancoOrigen: ''
   });
   
+  // Carga inicial (sin filtros)
   useEffect(() => {
     if (empresaActual?.id) {
         obtenerSolicitudes();
     }
   }, [empresaActual?.id]);
 
-  const obtenerSolicitudes = async () => {
-    if (!empresaActual?.id) return;
+  // --- FUNCIÓN DE CARGA DE DATOS (AHORA ACEPTA FECHAS) ---
+  const obtenerSolicitudes = async (filtrosFecha?: { desde: string, hasta: string }) => {
+    if (!empresaActual?.id) return [];
 
     try {
       setLoading(true);
       setError(null);
       const endpoint = `/solicitudes/listar/${empresaActual.id}`; 
+      
+      // Enviamos las fechas como query params al backend
       const response = await axios.get(buildApiUrl(endpoint), {
         withCredentials: true,
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        params: {
+            fechaDesde: filtrosFecha?.desde || '',
+            fechaHasta: filtrosFecha?.hasta || ''
+        }
       });
+
       const data = Array.isArray(response.data) ? response.data : (response.data?.rows ?? []);
-      setSolicitudes(data);
-      setSolicitudesFiltradas(data); 
+      
+      setSolicitudes(data); // Guardamos lo que trajo el servidor
+      
+      // Si fue una carga automática (sin filtros explícitos), mostramos todo
+      if (!filtrosFecha) {
+          setSolicitudesFiltradas(data);
+      }
+
+      return data; // Retornamos para que handleBuscar pueda usarlo inmediatamente
+
     } catch (err: any) {
       console.error("Error fetching:", err);
       setError("Error al cargar el historial de pagos.");
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
-  // --- MANEJO DE FILTROS ---
+  // --- MANEJO DE INPUTS ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setFiltros({
           ...filtros,
@@ -69,47 +84,46 @@ const ConsultaPagos: React.FC = () => {
       });
   };
 
-  const handleBuscar = () => {
-      let resultado = [...solicitudes];
+  // --- BUSCADOR HÍBRIDO (SERVIDOR + LOCAL) ---
+  const handleBuscar = async () => {
+      // 1. FILTRO DE SERVIDOR (Fechas)
+      // Pedimos datos frescos a la base de datos respetando el rango
+      const dataServidor = await obtenerSolicitudes({
+          desde: filtros.fechaInicio,
+          hasta: filtros.fechaFin
+      });
 
-      // 1. Filtro por Rango de Fechas
-      if (filtros.fechaInicio) {
-          const inicio = new Date(filtros.fechaInicio);
-          inicio.setHours(0, 0, 0, 0); // Ajustar al inicio del día
-          resultado = resultado.filter(s => new Date(s.creado_en) >= inicio);
-      }
-      if (filtros.fechaFin) {
-          const fin = new Date(filtros.fechaFin);
-          fin.setHours(23, 59, 59, 999); // Ajustar al final del día
-          resultado = resultado.filter(s => new Date(s.creado_en) <= fin);
-      }
+      if (!dataServidor) return;
 
-      // 2. Filtro por Beneficiario (Texto)
+      // 2. FILTROS LOCALES (Texto, Estatus, etc.)
+      // Sobre los datos que llegaron, aplicamos los filtros de "lupa"
+      let resultado = [...dataServidor];
+
+      // Filtro por Beneficiario (Texto)
       if (filtros.beneficiario) {
           const termino = filtros.beneficiario.toLowerCase();
-          resultado = resultado.filter(s => 
+          resultado = resultado.filter((s: any) => 
               s.beneficiario_nombre.toLowerCase().includes(termino) || 
               s.beneficiario_rif.toLowerCase().includes(termino)
           );
       }
 
-      // 3. Filtro por Método de Pago (Tipo)
+      // Filtro por Método de Pago
       if (filtros.metodoPago) {
-          resultado = resultado.filter(s => s.tipo_pago === filtros.metodoPago);
+          resultado = resultado.filter((s: any) => s.tipo_pago === filtros.metodoPago);
       }
 
-      // 4. Filtro por Banco de Origen
+      // Filtro por Banco de Origen
       if (filtros.bancoOrigen) {
-          // Asumimos que banco_origen guarda el nombre del banco
-          resultado = resultado.filter(s => 
+          resultado = resultado.filter((s: any) => 
               s.banco_origen && s.banco_origen.toLowerCase().includes(filtros.bancoOrigen.toLowerCase())
           );
       }
 
-      // 5. Filtro por Estatus
+      // Filtro por Estatus
       if (filtros.estatus) {
           const estatusNum = parseInt(filtros.estatus);
-          resultado = resultado.filter(s => s.estado_pago === estatusNum);
+          resultado = resultado.filter((s: any) => s.estado_pago === estatusNum);
       }
 
       setSolicitudesFiltradas(resultado);
@@ -124,7 +138,15 @@ const ConsultaPagos: React.FC = () => {
           estatus: '',
           bancoOrigen: ''
       });
-      setSolicitudesFiltradas(solicitudes);
+      // Recargamos todo sin filtros de fecha
+      obtenerSolicitudes();
+  };
+
+  // --- FORMATO DE FECHA SEGURO (SOLUCIÓN AL DÍA ANTERIOR) ---
+  const formatoFecha = (fechaStr: string) => {
+    if (!fechaStr) return '-';
+    // Tomamos solo los primeros 10 caracteres "YYYY-MM-DD" para evitar problemas de zona horaria
+    return fechaStr.substring(0, 10).split('-').reverse().join('/');
   };
 
   // --- EXPORTAR A CSV ---
@@ -141,7 +163,7 @@ const ConsultaPagos: React.FC = () => {
 
           return [
             sol.id,
-            new Date(sol.creado_en).toLocaleDateString(),
+            formatoFecha(sol.creado_en), // Usamos la función segura
             `"${sol.beneficiario_nombre}"`,
             sol.beneficiario_rif,
             sol.tipo_pago,
@@ -171,12 +193,6 @@ const ConsultaPagos: React.FC = () => {
       setSolicitudSeleccionada(solicitud);
       setIsDetalleOpen(true);
   };
-
-  const formatoFecha = (fechaStr: string) => {
-    if(!fechaStr) return '-';
-    const fecha = new Date(fechaStr);
-    return fecha.toLocaleDateString('es-VE');
-  }
 
   const getStatusBadge = (status: number) => {
       switch(status) {
@@ -216,18 +232,13 @@ const ConsultaPagos: React.FC = () => {
                     
                     // LÓGICA DE INTEGRACIÓN:
                     onSelect={(item) => {
-                        // 1. Recibimos el objeto completo del hijo (item)
-                        // 2. Extraemos el nombre (o RIF) y actualizamos el estado de filtros
                         setFiltros(prev => ({
                             ...prev,
-                            beneficiario: item.nombre // Guardamos el nombre para que el filtro de texto funcione
+                            beneficiario: item.nombre 
                         }));
                     }}
-                className={`w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:left-15 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}/>
-                
-                {/* Nota visual: Como el componente 'InputBeneficiarioAutocomplete' maneja su propio estado interno 'query',
-                    al dar clic en "Limpiar Filtros", el texto visual dentro del input no se borrará automáticamente 
-                    a menos que modifiquemos el componente hijo. Pero la lógica de filtrado funcionará correctamente. */}
+                // Estilos para sobreescribir el input interno
+                className={`w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}/>
             </div>
 
             {/* Fila 2 */}
@@ -253,11 +264,10 @@ const ConsultaPagos: React.FC = () => {
                 </select>
             </div>
              
-             {/* Fila 3: Banco (Input texto simple por ahora) */}
+             {/* Fila 3 */}
              <div className="md:col-span-2">
                 <label className={labelFilterClass}>Banco de Origen (Nombre)</label>
                 <InputBancosAutocomplete name="bancoOrigen" value={filtros.bancoOrigen} onChange={handleInputChange} className={inputFilterClass} />
-              
             </div>
         </div>
 

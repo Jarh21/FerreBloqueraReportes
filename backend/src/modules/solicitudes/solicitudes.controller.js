@@ -171,34 +171,50 @@ export const CrearSolicitud = async (req, res) => {
 export const ObtenerSolicitudes = async (req, res) => {
     try {
         const { empresaId } = req.params;
+        // 1. Recibimos las fechas por Query Params (ej: ?fechaDesde=2023-10-01&fechaHasta=2023-10-31)
+        const { fechaDesde, fechaHasta } = req.query; 
         
-        // 1. Obtener las solicitudes principales
-        const [solicitudes] = await pool.query(
-            "SELECT * FROM detalles_solicitudes WHERE empresa_id = ? ORDER BY creado_en DESC", 
-            [empresaId]
-        );
+        // --- CONSTRUCCIÓN DINÁMICA DE LA CONSULTA ---
+        let sql = "SELECT * FROM detalles_solicitudes WHERE empresa_id = ?";
+        let params = [empresaId];
 
+        // Si existen ambas fechas, aplicamos el filtro de rango
+        if (fechaDesde && fechaHasta) {
+            sql += " AND creado_en BETWEEN ? AND ?";
+            params.push(`${fechaDesde} 00:00:00`); // Inicio del día
+            params.push(`${fechaHasta} 23:59:59`); // Final del día
+        }
+
+        // Agregamos el ordenamiento al final
+        sql += " ORDER BY creado_en DESC";
+
+        // 2. Ejecutamos la consulta con los parámetros dinámicos
+        const [solicitudes] = await pool.query(sql, params);
+
+        // Si no hay solicitudes (por filtro o porque no existen), retornamos vacío
         if (solicitudes.length === 0) {
             return res.json([]);
         }
 
-        // 2. Extraer los IDs para buscar sus pagos
+        // --- A PARTIR DE AQUÍ TU LÓGICA DE PAGOS SE MANTIENE IGUAL ---
+
+        // 3. Extraer los IDs para buscar sus pagos
         const solicitudIds = solicitudes.map(s => s.id);
 
-        // 3. Buscar el HISTORIAL COMPLETO de pagos para estas solicitudes
+        // 4. Buscar el HISTORIAL COMPLETO de pagos para estas solicitudes
+        // Nota: Al usar solicitudIds filtrados, esta consulta también es más eficiente
         const [pagos] = await pool.query(
             `SELECT * FROM pagos_historial WHERE solicitud_id IN (?) ORDER BY creado_en ASC`,
             [solicitudIds]
         );
 
-        // 4. Combinar: Metemos el array de 'pagos' dentro de cada 'solicitud'
+        // 5. Combinar: Metemos el array de 'pagos' dentro de cada 'solicitud'
         const resultado = solicitudes.map(solicitud => {
-            // Filtramos los pagos que pertenecen a esta solicitud
             const susPagos = pagos.filter(p => p.solicitud_id === solicitud.id);
             
             return {
                 ...solicitud,
-                pagos: susPagos // <--- AQUÍ ESTÁ LA CLAVE. Ahora el frontend recibe la lista.
+                pagos: susPagos 
             };
         });
 
