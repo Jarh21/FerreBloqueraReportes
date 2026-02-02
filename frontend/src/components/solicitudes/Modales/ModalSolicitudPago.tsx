@@ -528,7 +528,8 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                     type="number" 
                                     step="0.01" 
                                     name="monto" 
-                                    value={formData.monto} 
+                                    // CAMBIO AQUÍ: Agregamos || '' para que oculte el 0
+                                    value={formData.monto || ''} 
                                     onChange={moneda === 'VES' ? handleFinancialChange : handleChange} 
                                     required={modoBeneficiario !== 'solo_registro'}
                                     className={`${inputClass} pl-8 font-mono font-bold text-slate-700`} 
@@ -551,7 +552,8 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                             type="number" 
                                             step="0.01" 
                                             name="tasa" 
-                                            value={formData.tasa} 
+                                            // CAMBIO AQUÍ
+                                            value={formData.tasa || ''} 
                                             onChange={handleFinancialChange} 
                                             readOnly={origenTasa !== 'MANUAL'} 
                                             className={`w-full p-2.5 border border-l-0 border-slate-200 rounded-r-lg text-sm outline-none transition-all ${origenTasa !== 'MANUAL' ? 'bg-slate-50 text-slate-500' : 'bg-white text-slate-800 focus:ring-2 focus:ring-red-700'}`} 
@@ -567,7 +569,8 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                             type="number" 
                                             step="0.01"
                                             name="monto_calculado" 
-                                            value={formData.monto_calculado} 
+                                            // CAMBIO AQUÍ
+                                            value={formData.monto_calculado || ''} 
                                             onChange={handleFinancialChange} 
                                             className={`${inputClass} pl-8 bg-white text-slate-700 border-dashed`} 
                                         />
