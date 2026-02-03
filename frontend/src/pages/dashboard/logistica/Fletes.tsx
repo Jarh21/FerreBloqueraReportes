@@ -285,7 +285,7 @@ const Fletes: React.FC = () => {
           closeMenuOnSelect={false}
           options={vehiculoOptions}
           value={selectedVehiculoOptions}
-          placeholder="Todos los Vehículos"
+          placeholder="Escoja una fecha para listar los vehículos"
           noOptionsMessage={() => "No hay vehículos"}
           onChange={(newValue: MultiValue<VehiculoOption>) => {
             const seleccion = newValue.map((o) => o.value);
@@ -396,7 +396,7 @@ const Fletes: React.FC = () => {
                     setSelectedCuentaTipoMoneda(codtipomoneda);         
                         
                     // Usamos un pequeño timeout o validación para asegurar que el estado se limpie
-                    const nuevaTasa = codtipomoneda === 1 ? 5 : 1;
+                    const nuevaTasa = codtipomoneda === 1 ? 1 : 5;
                     setTasaSeleccionadaId(nuevaTasa);              
                 }} 
             />

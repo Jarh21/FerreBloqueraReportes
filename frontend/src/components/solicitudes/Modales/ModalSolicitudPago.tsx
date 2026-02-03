@@ -4,7 +4,7 @@ import { useAuth } from '../../../context/AuthContext';
 import SelectorTiposPago from '../SelectSolicitudes/SelectorTipoPago';
 import InputBeneficiarioAutocomplete from '../SelectSolicitudes/InputBeneficiarioAutocomplete';
 import { toast } from 'sonner'; // <--- IMPORTAMOS SONNER
-
+import { buildApiUrl } from '../../../config/api';
 const TIPOS_PAGO = {
   BINANCE: "BINANCE",
   TRANSFERENCIA: "TRANSFERENCIA",
@@ -242,7 +242,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     };
 
     try {
-        const response = await fetch('http://localhost:4500/api/solicitudes/crear', { 
+        const response = await fetch(buildApiUrl('/solicitudes/crear'), { 
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

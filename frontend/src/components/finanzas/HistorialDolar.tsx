@@ -28,11 +28,20 @@ const HistorialDolar: React.FC = () => {
     const [error, setError] = React.useState<string | null>(null);
     const [tipos, setTipos] = React.useState<TipoMoneda[]>([]);
     const [historial, setHistorial] = React.useState<HistorialTasa[]>([]);
+    const [tasaApi, setTasaApi] = React.useState<number | null>(null);
     const [form, setForm] = React.useState({
         tipo_moneda_id: "",
         tasa_de_cambio: "",
         fecha: new Date().toISOString().slice(0, 10),
     });
+
+    React.useEffect(() => {
+        if (tasaApi === null) return;
+        setForm((prev) => ({
+            ...prev,
+            tasa_de_cambio: String(tasaApi),
+        }));
+    }, [tasaApi]);
 
     const cargarDatos = React.useCallback(async () => {
         if (!empresaActual?.id) return;
@@ -63,6 +72,7 @@ const HistorialDolar: React.FC = () => {
     React.useEffect(() => {
         if (!abierto) return;
         cargarDatos();
+        handleTasaApi();
     }, [abierto, cargarDatos]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -93,7 +103,19 @@ const HistorialDolar: React.FC = () => {
             setLoading(false);
         }
     };
-
+    const handleTasaApi = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const externalResponse = await axios.get('https://ve.dolarapi.com/v1/dolares/oficial');
+            setTasaApi(externalResponse.data.promedio);
+        } catch (err) {
+            console.error("Error al obtener tasa desde API", err);
+            setError("No se pudo obtener la tasa desde la API");
+        } finally {
+            setLoading(false);
+        }
+    };
     return (
         <div>
             <button
