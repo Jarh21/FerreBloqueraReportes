@@ -26,7 +26,7 @@ export const CrearSolicitud = async (req, res) => {
             beneficiario_banco,
             
             // Datos de la Solicitud
-            tipo_pago, // <--- Este dato ahora SÍ se guardará en el snapshot
+            tipo_pago, 
             solicitante,
             empresa_id,
             concepto,
@@ -108,9 +108,8 @@ export const CrearSolicitud = async (req, res) => {
         }
 
         // ----------------------------------------------------
-        // PASO 4: CREAR LA SOLICITUD / SNAPSHOT (CORREGIDO)
+        // PASO 4: CREAR LA SOLICITUD / SNAPSHOT
         // ----------------------------------------------------
-        // Aquí agregamos explícitamente 'tipo_pago' a la lista de columnas y valores
         
         const querySolicitud = `
             INSERT INTO detalles_solicitudes 
@@ -122,7 +121,7 @@ export const CrearSolicitud = async (req, res) => {
                 beneficiario_rif, 
                 beneficiario_banco, 
                 beneficiario_identificador,
-                tipo_pago,  -- <--- COLUMNA AGREGADA
+                tipo_pago,
                 monto, 
                 moneda_pago, 
                 tasa_cambio, 
@@ -134,7 +133,8 @@ export const CrearSolicitud = async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
-        await connection.query(querySolicitud, [
+        // CAMBIO 1: Agregamos [resultSolicitud] para capturar el ID insertado
+        const [resultSolicitud] = await connection.query(querySolicitud, [
             solicitante,
             empresa_id || 1,
             concepto,
@@ -142,7 +142,7 @@ export const CrearSolicitud = async (req, res) => {
             rifLimpio,
             beneficiario_banco || (tipo_pago === 'ZELLE' ? 'ZELLE' : null),
             identificador,
-            tipo_pago, // <--- VALOR AGREGADO
+            tipo_pago,
             monto,
             moneda,
             tasa || 1,
@@ -152,8 +152,26 @@ export const CrearSolicitud = async (req, res) => {
             estado_pago || 0
         ]);
 
+        // ----------------------------------------------------
+        // PASO 5: NOTIFICACIÓN PUSH (SOCKET.IO)
+        // ----------------------------------------------------
+        // CAMBIO 2: Emitimos el evento a todos los clientes conectados
+        if (req.io) {
+            req.io.emit('nueva_solicitud', {
+                id: resultSolicitud.insertId, // ID de la solicitud recién creada
+                mensaje: `Nueva solicitud creada por ${solicitante}`,
+                monto: monto,
+                moneda: moneda
+            });
+            console.log("🔔 Notificación Socket emitida: nueva_solicitud");
+        }
+
         await connection.commit();
-        res.status(200).json({ success: true, message: "Solicitud de pago creada exitosamente." });
+        res.status(200).json({ 
+            success: true, 
+            message: "Solicitud de pago creada exitosamente.",
+            id: resultSolicitud.insertId // Devolvemos el ID por si el frontend lo necesita
+        });
 
     } catch (error) {
         await connection.rollback();

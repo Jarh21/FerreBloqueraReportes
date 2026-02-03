@@ -238,7 +238,7 @@ const ConsultaPagos: React.FC = () => {
                         }));
                     }}
                 // Estilos para sobreescribir el input interno
-                className={`w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}/>
+               />
             </div>
 
             {/* Fila 2 */}

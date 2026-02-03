@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import InputBancosAutocomplete from '../SelectSolicitudes/InputBancosAutocomplete';
 import SelectCuenta from '../../selectoresContables/SelectCuenta';
-import { optionCSS } from 'react-select/dist/declarations/src/components/Option';
+import { toast } from 'sonner'; // ✅ Importado correctamente
 
 interface ModalProcesarPagoProps {
     isOpen: boolean;
     onClose: () => void;
-    onProcesar: (idSolicitud: number, datosPago: any) => void;
+    onProcesar: (idSolicitud: number, datosPago: any) => Promise<void> | void; // Soportamos promesas
     solicitud: any;
 }
 
@@ -25,19 +25,18 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
     const [modoPago, setModoPago] = useState<'completo' | 'abono'>('completo');
     const [montoAbono, setMontoAbono] = useState<string>('');
 
-    // --- CÁLCULOS LÓGICOS CORREGIDOS ---
+    // --- CÁLCULOS LÓGICOS ---
     const montoTotalOriginal = solicitud ? parseFloat(solicitud.monto || 0) : 0;
     const pagadoAnteriormente = solicitud ? parseFloat(solicitud.total_pagado || 0) : 0;
     
-    // 1. Calculamos lo que realmente se debe (Esto soluciona que el monto no se actualizaba)
+    // 1. Deuda real pendiente
     const deudaPendiente = Math.max(0, montoTotalOriginal - pagadoAnteriormente);
 
-    // 2. Definimos cuánto se va a pagar en esta operación
+    // 2. Monto a pagar en esta operación
     const montoAbonoNum = parseFloat(montoAbono) || 0;
-    // Si es completo, pagamos la DEUDA PENDIENTE, no el total original
     const montoFinal = modoPago === 'completo' ? deudaPendiente : montoAbonoNum;
     
-    // 3. Calculamos cuánto quedará debiendo después de este pago
+    // 3. Restante después de este pago
     const restante = Math.max(0, deudaPendiente - montoFinal);
 
     useEffect(() => {
@@ -51,30 +50,23 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
         }
     }, [isOpen, solicitud]);
 
-    // --- SOLUCIÓN 1: ESCUCHAR CTRL + V (GLOBAL EN LA MODAL) ---
+    // --- MANEJO DE PEGAR IMAGEN (CTRL + V) ---
     useEffect(() => {
         const handleWindowPaste = (e: ClipboardEvent) => {
             if (!isOpen) return;
-
-            // Buscamos si en lo que se pegó hay archivos
             if (e.clipboardData && e.clipboardData.files.length > 0) {
                 const file = e.clipboardData.files[0];
-                // Verificamos que sea imagen
                 if (file.type.startsWith('image/')) {
-                    e.preventDefault(); // Evita que se pegue texto si el foco está en un input
+                    e.preventDefault();
                     setComprobante(file);
                     setPreviewUrl(URL.createObjectURL(file));
+                    // Feedback visual sutil
+                    toast.info("Imagen pegada desde portapapeles");
                 }
             }
         };
-
-        // Agregamos el evento al documento
         window.addEventListener('paste', handleWindowPaste);
-
-        // Limpieza al cerrar modal
-        return () => {
-            window.removeEventListener('paste', handleWindowPaste);
-        };
+        return () => window.removeEventListener('paste', handleWindowPaste);
     }, [isOpen]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,56 +77,63 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
         }
     };
 
-    // --- SOLUCIÓN 2: BOTÓN CON API DE PORTAPAPELES (INTENTO MANUAL) ---
+    // --- BOTÓN PEGAR MANUAL ---
     const handlePasteImage = async () => {
         try {
-            // Intentamos leer el portapapeles
             const clipboardItems = await navigator.clipboard.read();
             let imagenEncontrada = false;
 
             for (const item of clipboardItems) {
-                // Buscamos tipos de imagen
                 const imageType = item.types.find(type => type.startsWith('image/'));
-                
                 if (imageType) {
                     const blob = await item.getType(imageType);
-                    // Creamos un archivo a partir del Blob
                     const file = new File([blob], "captura_portapapeles.png", { type: imageType });
-                    
                     setComprobante(file);
                     setPreviewUrl(URL.createObjectURL(file));
                     imagenEncontrada = true;
+                    toast.success("Imagen adjuntada correctamente");
                     break; 
                 }
             }
 
             if (!imagenEncontrada) {
-                alert("No se encontró ninguna imagen en el portapapeles. Asegúrate de haber copiado una imagen, no un archivo.");
+                // ANTES: alert(...) -> AHORA: toast
+                toast.warning("No se encontró imagen", {
+                    description: "Asegúrate de copiar la imagen (Click derecho > Copiar imagen) y no el archivo."
+                });
             }
         } catch (err) {
             console.error("Error al leer portapapeles:", err);
-            // Fallback amigable
-            alert("Tu navegador bloqueó el acceso directo. Por favor, haz clic en cualquier parte de la modal y presiona Ctrl + V.");
+            toast.error("Permiso denegado", {
+                description: "Tu navegador bloqueó el acceso. Haz clic en la modal y presiona Ctrl + V."
+            });
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // --- ENVÍO DEL FORMULARIO ---
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
+        // 1. Validaciones con TOASTS
         if (!bancoOrigen || !referencia) {
-            alert("El Banco de Origen y la Referencia son obligatorios.");
+            toast.error("Datos incompletos", {
+                description: "El Banco de Origen y la Referencia son obligatorios."
+            });
             return;
         }
 
         if (montoFinal <= 0) {
-            alert("El monto a pagar debe ser mayor a 0.");
+            toast.error("Monto inválido", {
+                description: "El monto a pagar debe ser mayor a 0."
+            });
             return;
         }
 
         if (modoPago === 'abono') {
-            // Validamos contra la deuda pendiente, no contra el total original
             if (montoFinal > deudaPendiente + 0.01) { 
-                alert("El abono no puede ser mayor a la deuda pendiente.");
+                toast.warning("Monto Excedido", {
+                    description: `El abono (${montoFinal}) no puede ser mayor a la deuda pendiente (${deudaPendiente.toFixed(2)}).`
+                });
                 return;
             }
         }
@@ -146,12 +145,27 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
             referencia: referencia,
             comprobante: comprobante,
             monto_pagado: montoFinal,
-            // Es abono si NO se cubre toda la deuda pendiente
             es_abono: restante > 0.01 
         };
 
-        onProcesar(solicitud.id, datosPago);
-        setLoading(false);
+        try {
+            // Esperamos a que la función padre procese
+            await onProcesar(solicitud.id, datosPago);
+            
+            // ÉXITO
+            toast.success(modoPago === 'completo' ? "¡Pago Completado!" : "Abono Registrado", {
+                description: `Se procesaron ${montoFinal.toFixed(2)} ${solicitud.moneda_pago === 'VES' ? 'Bs' : '$'} correctamente.`
+            });
+            
+            // La modal debería cerrarse desde el padre, pero por si acaso limpiamos loading
+        } catch (error) {
+            console.error(error);
+            toast.error("Error al procesar", {
+                description: "Ocurrió un error al guardar el pago. Intenta nuevamente."
+            });
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (!isOpen || !solicitud) return null;
@@ -193,7 +207,6 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                 <input value={solicitud.beneficiario_rif || ''} disabled className={inputDisabledClass} />
                             </div>
                             <div>
-                                {/* AQUÍ ESTÁ EL CAMBIO VISUAL DE VALOR: Mostramos deudaPendiente */}
                                 <label className={labelClass}>Monto {pagadoAnteriormente > 0 ? 'Pendiente' : 'Total'}</label>
                                 <div className="relative">
                                     <input 
@@ -248,7 +261,6 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 bg-green-50/30 rounded-xl border border-green-100">
                             
-                            {/* CAMPO DINÁMICO: MONTO */}
                             {modoPago === 'abono' && (
                                 <div className="md:col-span-2 animate-fade-in-down mb-2">
                                     <div className="grid grid-cols-2 gap-4">
@@ -281,18 +293,7 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                             {/* Banco Origen */}
                             <div>
                                 <label className={labelClass}>Cuenta de Origen</label>
-
-                                <SelectCuenta name="banco_origen" value={bancoOrigen} onChange= {setBancoOrigen} class="w-full hover:cursor-text" />
-                                
-                            {/* <InputBancosAutocomplete 
-                                    name="banco_origen" 
-                                    value={bancoOrigen} 
-                                    onChange={(e) => setBancoOrigen(e.target.value)} 
-                                    className={inputActiveClass}
-                                    placeholder="Ej: Banesco - 0134..."
-                                /> */}
-
-
+                                <SelectCuenta name="banco_origen" value={bancoOrigen} onChange={setBancoOrigen} className="w-full hover:cursor-text" />
                             </div>
 
                             {/* Referencia */}
@@ -304,7 +305,6 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                     onChange={(e) => setReferencia(e.target.value)}
                                     className={inputActiveClass}
                                     placeholder="Ultimos 6 digitos"
-                                    maxLength={6}
                                     required
                                 />
                             </div>

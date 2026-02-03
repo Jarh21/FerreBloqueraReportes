@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import InputBancosAutocomplete from '../SelectSolicitudes/InputBancosAutocomplete';
-import {useAuth} from '../../../context/AuthContext';
+import { useAuth } from '../../../context/AuthContext';
 import SelectorTiposPago from '../SelectSolicitudes/SelectorTipoPago';
 import InputBeneficiarioAutocomplete from '../SelectSolicitudes/InputBeneficiarioAutocomplete';
+import { toast } from 'sonner'; // <--- IMPORTAMOS SONNER
 
 const TIPOS_PAGO = {
   BINANCE: "BINANCE",
@@ -34,8 +35,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
   const [loading, setLoading] = useState(false);
   const [modoBeneficiario, setModoBeneficiario] = useState<'nuevo' | 'registrado' | 'solo_registro'>('nuevo');
   const [guardarBeneficiario, setGuardarBeneficiario] = useState(false);
-  
-  // NUEVO ESTADO: Para el switch "Agregar a Existente"
   const [agregarAExistente, setAgregarAExistente] = useState(false);
 
   const [moneda, setMoneda] = useState<'USD' | 'VES'>('USD');
@@ -67,7 +66,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
 
   // Limpiar formulario al cambiar de pestaña
   useEffect(() => {
-    // Resetear estados visuales
     setAgregarAExistente(false);
     setRifPrefijo('V');
     setRifNumero('');
@@ -81,7 +79,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
         beneficiario_telefono: '',
         beneficiario_cuenta: '',
         beneficiario_email: '',
-        tipo_pago: '', // Opcional: reiniciar tipo de pago también
+        tipo_pago: '',
         monto: 0,
         concepto: ''
     }));
@@ -111,9 +109,20 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     }
   }, [origenTasa, tasaBCV, tasaEuro, moneda]);
 
-  // --- LÓGICA MAESTRA DE SELECCIÓN ---
+  // --- FILTROS DE INPUTS (SOLO NÚMEROS) ---
+  const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = e.target;
+      // Regex: Solo permite dígitos del 0 al 9. Elimina todo lo demás.
+      const valorLimpio = value.replace(/[^0-9]/g, '');
+      setFormData(prev => ({ ...prev, [name]: valorLimpio }));
+  };
+
+  const handleChange = (e: { target: { name: string; value: any } }) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleBeneficiarioSeleccionado = (item: any) => {
-      // 1. Parsear RIF
       let p = 'V';
       let n = '';
       if (item.rif && item.rif.includes('-')) {
@@ -127,27 +136,18 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
       setRifPrefijo(p);
       setRifNumero(n);
 
-      // 2. Lógica Diferenciada
       if (modoBeneficiario === 'solo_registro' && agregarAExistente) {
-          // CASO A: Agregar cuenta a persona existente
-          // Solo rellenamos IDENTIDAD (Nombre y RIF)
-          // Dejamos vacíos los datos bancarios para que el usuario los llene
           setFormData(prev => ({
               ...prev,
               beneficiario_id_seleccionado: item.beneficiario_id,
               beneficiario_nombre: item.nombre,
               beneficiario_rif: item.rif,
-              // Limpiamos datos bancarios explícitamente
               beneficiario_banco: '',
               beneficiario_email: '',
               beneficiario_telefono: '',
               beneficiario_cuenta: '',
-              // Mantenemos el tipo de pago que el usuario eligió en el selector
           }));
-
       } else {
-          // CASO B: "Buscar Registrado" (Pagar a cuenta existente)
-          // Rellenamos TODO (Identidad + Banco)
           let email = '';
           let telefono = '';
           let cuenta = '';
@@ -165,7 +165,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
               beneficiario_id_seleccionado: item.beneficiario_id,
               beneficiario_nombre: item.nombre,
               beneficiario_rif: item.rif,
-              tipo_pago: item.tipo_pago, // El tipo viene del registro guardado
+              tipo_pago: item.tipo_pago,
               beneficiario_banco: item.banco || '',
               beneficiario_email: email,
               beneficiario_telefono: telefono,
@@ -205,21 +205,16 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     }
   };
 
-  const handleChange = (e: { target: { name: string; value: any } }) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (modoBeneficiario === 'registrado' && !formData.beneficiario_id_seleccionado) {
-        alert("Por favor, busca y selecciona un beneficiario del directorio antes de guardar.");
+        toast.error("Selección Requerida", { description: "Busca y selecciona un beneficiario del directorio." });
         return;
     }
     
     if ((modoBeneficiario === 'solo_registro' || modoBeneficiario === 'nuevo') && !formData.beneficiario_nombre) {
-        alert("El nombre del beneficiario es obligatorio.");
+        toast.error("Datos Faltantes", { description: "El nombre del beneficiario es obligatorio." });
         return;
     }
 
@@ -259,24 +254,27 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
         const data = await response.json();
 
         if (response.ok) {
-            alert(data.message || 'Operación exitosa');
+            // ÉXITO CON SONNER
+            toast.success(modoBeneficiario === 'solo_registro' ? "Directorio Actualizado" : "Solicitud Creada", {
+                description: modoBeneficiario === 'solo_registro' 
+                    ? "El beneficiario ha sido guardado exitosamente." 
+                    : `Solicitud #${data.id || ''} registrada correctamente.`
+            });
+            
             if (onSave) onSave(formData, payload.estado_pago, modoBeneficiario === 'solo_registro');
             onClose();
         } else {
-            alert(`Error: ${data.message || 'No se pudo procesar la solicitud'}`);
+            // ERROR DE API
+            toast.error("Error al guardar", { description: data.message || 'No se pudo procesar la solicitud' });
         }
     } catch (error) {
         console.error("Error de conexión:", error);
-        alert("Error de conexión con el servidor");
+        toast.error("Error de Conexión", { description: "No se pudo contactar con el servidor." });
     } finally {
         setLoading(false);
     }
   };
 
-  // --- DETERMINAR SI BLOQUEAR CAMPOS DE IDENTIDAD ---
-  // Bloqueamos Nombre y RIF si:
-  // 1. Estamos en modo "Registrado" (siempre)
-  // 2. Estamos en modo "Agregar Beneficiario" Y tenemos activado "Agregar a Existente" Y ya seleccionamos a alguien
   const camposIdentidadBloqueados = (modoBeneficiario === 'registrado') || 
                                     (modoBeneficiario === 'solo_registro' && agregarAExistente && !!formData.beneficiario_id_seleccionado);
 
@@ -293,15 +291,16 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
               <select
                   value={rifPrefijo}
                   onChange={(e) => setRifPrefijo(e.target.value)}
-                  disabled={camposIdentidadBloqueados} // APLICAMOS BLOQUEO
+                  disabled={camposIdentidadBloqueados} 
                   className={`border border-slate-200 text-sm font-bold text-slate-700 rounded-l-lg px-2 outline-none transition-colors cursor-pointer w-16 text-center appearance-none ${camposIdentidadBloqueados ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-100 focus:bg-white focus:ring-2 focus:ring-red-700'}`}
               >
                   {PREFIJOS_RIF.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
               <input
                   value={rifNumero}
-                  onChange={(e) => setRifNumero(e.target.value)}
-                  disabled={camposIdentidadBloqueados} // APLICAMOS BLOQUEO
+                  // CAMBIO: Filtro numérico en RIF
+                  onChange={(e) => setRifNumero(e.target.value.replace(/[^0-9]/g, ''))}
+                  disabled={camposIdentidadBloqueados}
                   className={`w-full p-2.5 border border-l-0 border-slate-200 rounded-r-lg text-sm outline-none transition-all font-mono ${camposIdentidadBloqueados ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-red-700'}`}
                   placeholder="12345678"
                   maxLength={12} 
@@ -321,7 +320,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
   };
 
   const renderCamposManuales = () => {
-     // Clase condicional para input de Nombre Bloqueado
      const nombreInputClass = camposIdentidadBloqueados 
         ? "w-full p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed outline-none"
         : inputClass;
@@ -357,7 +355,18 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 <div className="space-y-1 md:col-span-2"><label className={labelClass}>Nombre del Beneficiario</label><input name="beneficiario_nombre" value={formData.beneficiario_nombre} onChange={handleChange} disabled={camposIdentidadBloqueados} className={nombreInputClass} /></div>
                 <div className="space-y-1"><label className={labelClass}>Banco</label><InputBancosAutocomplete name="beneficiario_banco" value={formData.beneficiario_banco} onChange={handleChange} className={inputClass} /></div>
                 {renderRifInput()}
-                <div className="space-y-1"><label className={labelClass}>Teléfono</label><input name="beneficiario_telefono" value={formData.beneficiario_telefono} onChange={handleChange} className={inputClass} /></div>
+                <div className="space-y-1">
+                    <label className={labelClass}>Teléfono</label>
+                    {/* CAMBIO: Usamos handleNumericInput */}
+                    <input 
+                        name="beneficiario_telefono" 
+                        value={formData.beneficiario_telefono} 
+                        onChange={handleNumericInput} 
+                        className={inputClass} 
+                        placeholder="04141234567"
+                        maxLength={11}
+                    />
+                </div>
                 {renderConceptoInput()}
                 </>
             );
@@ -367,7 +376,18 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 <div className="space-y-1 md:col-span-2"><label className={labelClass}>Nombre del Beneficiario</label><input name="beneficiario_nombre" value={formData.beneficiario_nombre} onChange={handleChange} disabled={camposIdentidadBloqueados} className={nombreInputClass} /></div>
                 {renderRifInput()}
                 <div className="space-y-1"><label className={labelClass}>Banco</label><InputBancosAutocomplete name="beneficiario_banco" value={formData.beneficiario_banco} onChange={handleChange} className={inputClass} /></div>
-                <div className="space-y-1 md:col-span-2"><label className={labelClass}>Nro Cuenta</label><input name="beneficiario_cuenta" value={formData.beneficiario_cuenta} maxLength={20} onChange={handleChange} className={inputClass} /></div>
+                <div className="space-y-1 md:col-span-2">
+                    <label className={labelClass}>Nro Cuenta</label>
+                    {/* CAMBIO: Usamos handleNumericInput */}
+                    <input 
+                        name="beneficiario_cuenta" 
+                        value={formData.beneficiario_cuenta} 
+                        maxLength={20} 
+                        onChange={handleNumericInput} 
+                        className={inputClass} 
+                        placeholder="0102..."
+                    />
+                </div>
                 {renderConceptoInput()}
                 </>
             );
@@ -443,13 +463,11 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                     </div>
                 ) : (
                     <>
-                        {/* Header de la sección de registro */}
                         <div className="flex justify-between items-center mb-2">
                             <h4 className="text-sm font-bold text-slate-700">
                                 {modoBeneficiario === 'solo_registro' ? 'Datos para el Directorio' : 'Datos del Nuevo Beneficiario'}
                             </h4>
                             
-                            {/* Toggle Switch para Agregar a Existente (Solo en modo registro) */}
                             {modoBeneficiario === 'solo_registro' && (
                                 <label className="flex items-center cursor-pointer select-none mr-2">
                                     <div className="relative">
@@ -459,7 +477,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                             checked={agregarAExistente} 
                                             onChange={(e) => {
                                                 setAgregarAExistente(e.target.checked);
-                                                // Resetear selección al cambiar
                                                 if(!e.target.checked) {
                                                     setFormData(prev => ({...prev, beneficiario_nombre: '', beneficiario_rif: '', beneficiario_id_seleccionado: ''}));
                                                     setRifPrefijo('V'); setRifNumero('');
@@ -474,7 +491,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                 </label>
                             )}
                             
-                            {/* Checkbox "Guardar en directorio" (Solo en modo Nuevo Pago) */}
                             {modoBeneficiario !== 'solo_registro' && formData.tipo_pago !== TIPOS_PAGO.EFECTIVO && (
                                 <label className="flex items-center cursor-pointer select-none">
                                     <div className="relative">
@@ -487,7 +503,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                             )}
                         </div>
 
-                        {/* BUSCADOR: Solo visible si "Agregar a Existente" está activo */}
                         {modoBeneficiario === 'solo_registro' && agregarAExistente && (
                             <div className="mb-4 animate-fade-in-down">
                                 <InputBeneficiarioAutocomplete 
@@ -528,7 +543,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                     type="number" 
                                     step="0.01" 
                                     name="monto" 
-                                    // CAMBIO AQUÍ: Agregamos || '' para que oculte el 0
                                     value={formData.monto || ''} 
                                     onChange={moneda === 'VES' ? handleFinancialChange : handleChange} 
                                     required={modoBeneficiario !== 'solo_registro'}
@@ -552,7 +566,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                             type="number" 
                                             step="0.01" 
                                             name="tasa" 
-                                            // CAMBIO AQUÍ
                                             value={formData.tasa || ''} 
                                             onChange={handleFinancialChange} 
                                             readOnly={origenTasa !== 'MANUAL'} 
@@ -569,7 +582,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                             type="number" 
                                             step="0.01"
                                             name="monto_calculado" 
-                                            // CAMBIO AQUÍ
                                             value={formData.monto_calculado || ''} 
                                             onChange={handleFinancialChange} 
                                             className={`${inputClass} pl-8 bg-white text-slate-700 border-dashed`} 
