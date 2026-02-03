@@ -227,7 +227,7 @@ const ConsultaPagos: React.FC = () => {
                 <label className={labelFilterClass}>Beneficiario / RIF</label>
                 
                 <InputBeneficiarioAutocomplete 
-                    className={`${inputFilterClass} w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:left-15 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}
+                    className={inputFilterClass}
                     disabled={loading}
                     
                     // LÓGICA DE INTEGRACIÓN:
@@ -237,16 +237,13 @@ const ConsultaPagos: React.FC = () => {
                             beneficiario: item.nombre 
                         }));
                     }}
-<<<<<<< HEAD
-                // Estilos para sobreescribir el input interno
-               />
-=======
+
                 className={`w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:left-15 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}/>
                 
                 {/* Nota visual: Como el componente 'InputBeneficiarioAutocomplete' maneja su propio estado interno 'query',
                     al dar clic en "Limpiar Filtros", el texto visual dentro del input no se borrará automáticamente 
                     a menos que modifiquemos el componente hijo. Pero la lógica de filtrado funcionará correctamente. */}
->>>>>>> 6d0fc307c90149e26516a677c814dc9c8b75ac77
+
             </div>
 
             {/* Fila 2 */}
