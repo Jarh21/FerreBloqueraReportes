@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from "../../../context/AuthContext";
-import { buildApiUrl } from '../../../config/api';
+import { buildApiUrl, SERVER_URL } from '../../../config/api'; // <--- IMPORTAMOS SERVER_URL
 import axios from 'axios';
+import { toast } from 'sonner'; // <--- Usamos Sonner para consistencia
+import io from 'socket.io-client'; // <--- IMPORTAMOS SOCKET
 
 // IMPORTAMOS LOS MODALES
 import ModalSolicitudPago from '../../../components/solicitudes/Modales/ModalSolicitudPago';
@@ -27,16 +29,43 @@ const GestionPagos: React.FC = () => {
   // Solicitud seleccionada
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<any>(null);
   
+  // 1. CARGA INICIAL
   useEffect(() => {
     if (empresaActual?.id) {
         obtenerSolicitudes();
     }
   }, [empresaActual?.id]);
 
+  // 2. ESCUCHA EN TIEMPO REAL (SOCKET.IO)
+  useEffect(() => {
+      // Conectamos al socket
+      const socket = io(SERVER_URL, { withCredentials: true, autoConnect: true });
+
+      // Escuchamos el evento
+      socket.on('nueva_solicitud', (data) => {
+          // Si estamos viendo la empresa correcta (o si no filtras por empresa en el socket)
+          // Refrescamos la lista silenciosamente
+          obtenerSolicitudes(); 
+          
+          // Opcional: Feedback visual discreto
+          toast.info("Lista actualizada", { 
+              description: "Se ha recibido una nueva solicitud.",
+              duration: 3000 
+          });
+      });
+
+      // Limpieza al salir de la pantalla
+      return () => {
+          socket.disconnect();
+      };
+  }, [empresaActual?.id]); // Re-creamos si cambia la empresa
+
   const obtenerSolicitudes = async () => {
     if (!empresaActual?.id) return;
 
     try {
+      // Nota: Si es un refresco automático (socket), quizás no quieras activar el loading global
+      // para no parpadear la pantalla, pero por seguridad lo dejamos así.
       setLoading(true);
       setError(null);
       const endpoint = `/solicitudes/listar/${empresaActual.id}`;
@@ -48,21 +77,13 @@ const GestionPagos: React.FC = () => {
       });
       let data = Array.isArray(response.data) ? response.data : (response.data?.rows ?? []);
       
-      // --- FILTRO Y ORDENAMIENTO (CAMBIO CLAVE) ---
-      
-      // 1. FILTRAR: Solo mostramos Pendientes (0) y Abonados (3)
-      // Ocultamos Pagados (1) y Anulados (2)
+      // --- FILTRO Y ORDENAMIENTO ---
       data = data.filter((s: any) => s.estado_pago === 0 || s.estado_pago === 3);
 
-      // 2. ORDENAR/AGRUPAR:
-      // Primero agrupamos por estado (todos los 0 juntos, todos los 3 juntos)
-      // Y dentro de cada grupo, ordenamos por fecha (más reciente primero)
       data.sort((a: any, b: any) => {
           if (a.estado_pago === b.estado_pago) {
-              // Si el estado es el mismo, el más nuevo va primero
               return new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime();
           }
-          // Si son estados diferentes, ponemos primero los Pendientes (0) y luego Abonados (3)
           return a.estado_pago - b.estado_pago; 
       });
 
@@ -79,6 +100,8 @@ const GestionPagos: React.FC = () => {
 
   const handleCrearSolicitud = async (formData: FormData) => {
     try {
+        // Al crear, la lista se actualizará sola por el Socket, 
+        // pero hacemos un fetch manual por seguridad inmediata.
         setLoading(true);
         await obtenerSolicitudes(); 
         setIsModalOpen(false);
@@ -112,13 +135,14 @@ const GestionPagos: React.FC = () => {
               withCredentials: true
           });
 
-          alert(datosPago.es_abono ? "Abono registrado correctamente" : "Pago completado correctamente");
+          // Feedback moderno
+          toast.success(datosPago.es_abono ? "Abono registrado" : "Pago completado");
           setIsProcesarModalOpen(false);
           obtenerSolicitudes(); 
 
       } catch (err: any) {
           console.error(err);
-          alert("Error al procesar el pago: " + (err.response?.data?.message || err.message));
+          toast.error("Error al procesar", { description: err.response?.data?.message || err.message });
       } finally {
           setLoading(false);
       }
@@ -126,6 +150,7 @@ const GestionPagos: React.FC = () => {
 
   // Anular Solicitud
   const handleAnularSolicitud = async (id: number) => {
+      // Usamos confirm nativo, se podría migrar a un modal custom luego
       const confirmacion = window.confirm("¿Estás seguro de que deseas ANULAR esta solicitud? Esta acción no se puede deshacer.");
       if (!confirmacion) return;
 
@@ -135,11 +160,11 @@ const GestionPagos: React.FC = () => {
               withCredentials: true,
               headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
-          alert("Solicitud anulada correctamente.");
+          toast.success("Solicitud anulada");
           obtenerSolicitudes();
       } catch (err: any) {
           console.error(err);
-          alert("Error al anular: " + (err.response?.data?.message || err.message));
+          toast.error("Error al anular", { description: err.response?.data?.message || err.message });
       } finally {
           setLoading(false);
       }
