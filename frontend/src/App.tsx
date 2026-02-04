@@ -34,10 +34,11 @@ export default function App() {
           toast.info("🔔 Nueva Solicitud Recibida", {
               description: `${data.mensaje}. Monto: ${data.monto} ${data.moneda}`,
               duration: 80000000, 
-              action: {
-                  label: "Ver",
-                  onClick: () => window.location.href = "/consultas" 
-              }
+              /* action: {
+                
+                label: "Ver",
+                  onClick: () => window.location.href = "/dashboard/solicitudes/consulta" 
+              } */
           });
       });
 
