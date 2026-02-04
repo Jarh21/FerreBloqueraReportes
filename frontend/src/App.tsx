@@ -36,7 +36,7 @@ export default function App() {
               duration: 80000000, 
               action: {
                   label: "Ver",
-                  onClick: () => window.location.href = "/consultas" 
+                  onClick: () => window.location.href = "/dashboard/solicitudes/consulta" 
               }
           });
       });
