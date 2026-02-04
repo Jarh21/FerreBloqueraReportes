@@ -177,7 +177,7 @@ export const guardarFletesSeleccionados = async (req, res) => {
          fecha, codusua, usuario, equipo, registrado) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, NOW())`;
         const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, sumaMontoFletes,0,montoEnMonedaLocal,9,'SISTEMA-REPORTES','SERVER'];
-        await pool.query(asientoSql, asientoValores);
+        await ejecutarConsultaEnEmpresaPorId(empresaId, asientoSql, asientoValores);
 
         //guardar en la tabla logistica_fletes_cancelados
         const valores = keycodigos.map((fleteId, index) => [empresaId, fleteId, new Date(), contCuenta, contConcepto, montoFletes[index],montoFletes[index]*tasaCambio, new Date(), new Date()]);
@@ -238,7 +238,8 @@ export const obtenerTotalFletesPorVehiculo = async (req, res) => {
                 ROUND(AVG(f.total), 2) AS promedio_por_factura,
                 COUNT(DISTINCT f.receptor_nombre) AS clientes_distintos_atendidos,
                 -- Nueva columna de porcentaje
-                ROUND((SUM(f.total) * 100 / SUM(SUM(f.total)) OVER()),2) AS porcentaje_del_total
+                ROUND((SUM(f.total) * 100 / SUM(SUM(f.total)) OVER()),2) AS porcentaje_del_total                
+                
             FROM factura_tipo_logistica f
             WHERE 
                 1=1                

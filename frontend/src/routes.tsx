@@ -9,6 +9,7 @@ import Inicio from "./pages/dashboard/Inicio"
 
 import Logistica from "./pages/dashboard/logistica/Fletes"
 import EstadisticaFletes from "./pages/dashboard/logistica/EstadisticaFletes"
+import ReporteFletes from "./pages/dashboard/logistica/ReporteFletes";
 
 import Proveedores from "./pages/dashboard/reportes/Proveedores"
 import Ventas from "./pages/dashboard/reportes/Ventas"
@@ -64,7 +65,8 @@ export default function AppRoutes() {
         <Route path="configuracion/UsuarioEditar/:id" element={<EditarUsusario />} />
         /***logistica */       
         <Route path="logistica/*" element={<Logistica />} />   
-        <Route path="logistica/reporte-fletes" element={<EstadisticaFletes />} />    
+        <Route path="logistica/estadistica-fletes" element={<EstadisticaFletes />} />
+        <Route path ="logistica/reporte-fletes" element ={<ReporteFletes />} />    
         {/* Solicitudes */}
         <Route path="solicitudes/crear" element={<SolicitudesCrear />} />
         <Route path="solicitudes/consulta" element={<ConsultaPagos />} />

@@ -4,9 +4,9 @@ import AppRoutes from "./routes";
 import React, { useEffect } from 'react';
 import { Toaster, toast } from 'sonner'; // Importamos toast también
 import io from 'socket.io-client'; // Importamos el cliente
-
+import { buildApiUrl } from './config/api';
 // Conectamos al backend (Asegúrate de que la URL sea correcta)
-const socket = io('http://localhost:4500', {
+const socket = io(buildApiUrl('/'), {
     withCredentials: true,
     autoConnect: true
 });

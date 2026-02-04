@@ -651,8 +651,15 @@ export const obtenerTasaDiaSiace = async (req, res) => {
     if (!empresaId || !fecha) {
       return res.status(400).json({ error: "Faltan parámetros: empresaId, fecha" });
     }
-    const consultaSQL = `SELECT nueva_tasa_de_cambio_en_moneda_nacional FROM tipo_moneda_historial_tasa WHERE fecha = ? LIMIT 1;`;
-    const resultados = await ejecutarConsultaEnEmpresaPorId(empresaId, consultaSQL, [fecha]);
+    const consultaSQL = `
+    SELECT 
+      h.tasa_de_cambio AS nueva_tasa_de_cambio_en_moneda_nacional 
+      FROM tipo_moneda_historial_tasa h,tipo_moneda t 
+      WHERE
+       t.is_moneda_secundaria = 1 AND 
+       h.tipo_moneda_id = t.keycodigo AND 
+       h.fecha = ? LIMIT 1`;
+    const [resultados] = await pool.query(consultaSQL, [fecha]);
     res.json(resultados);
   } catch (error) {
     console.error(error.stack);
@@ -1193,7 +1200,7 @@ export const obtenerCatalogoTipoMoneda = async (req, res) => {
     const { empresaId } = req.params
     if (!empresaId) return res.status(400).json({ error: 'Falta empresaId' })
 
-    const consultaSQL = `SELECT keycodigo,nombre_singular,abreviatura,is_nacional,precio_venta_moneda_nacional FROM tipo_moneda WHERE is_activo = 1 ORDER BY abreviatura;`
+    const consultaSQL = `SELECT keycodigo,nombre_singular,abreviatura,is_nacional,precio_venta_moneda_nacional FROM tipo_moneda WHERE is_activo = 1 ;`
     const [rows] = await pool.query(consultaSQL)
     res.json(rows)
   } catch (error) {
@@ -1222,6 +1229,83 @@ export const obtenerHistorialTasaTipoMoneda = async (req, res) => {
   }
 }
 
+export const editarHistorialTasaTipoMoneda = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { tipo_moneda_id, tasa_de_cambio, fecha } = req.body
+
+    const idRegistro = Number(id)
+    const tipoMonedaId = Number(tipo_moneda_id)
+    const tasa = Number(tasa_de_cambio)
+
+    if (!idRegistro || !tipoMonedaId || Number.isNaN(tasa) || !fecha) {
+      return res.status(400).json({ error: 'Faltan parámetros o formato incorrecto' })
+    }
+
+    const [historialRows] = await pool.query(
+      `SELECT id FROM tipo_moneda_historial_tasa WHERE id = ?`,
+      [idRegistro]
+    )
+
+    if (historialRows.length === 0) {
+      return res.status(404).json({ error: 'Registro de historial no encontrado' })
+    }
+
+    //validamos que no exista un registro duplicado
+    const [duplicadoRows] = await pool.query(
+      `SELECT id FROM tipo_moneda_historial_tasa
+       WHERE fecha = ? AND tipo_moneda_id = ? AND tasa_de_cambio = ? AND id <> ?
+       LIMIT 1`,
+      [fecha, tipoMonedaId, tasa, idRegistro]
+    )
+
+    if (duplicadoRows.length > 0) {      
+      return res.status(409).json({ error: 'Ya existe un registro con la misma fecha, moneda y tasa' })
+    }
+    //buscamos los valores anteriores de la tasa
+    const [monedaRows] = await pool.query(
+      `SELECT precio_venta_moneda_nacional, precio_actual_fecha FROM tipo_moneda WHERE keycodigo = ?`,
+      [tipoMonedaId]
+    )
+
+    if (monedaRows.length === 0) {
+      return res.status(404).json({ error: 'Tipo de moneda no encontrado' })
+    }
+
+    const precioAnteriorMonto = monedaRows[0].precio_venta_moneda_nacional ?? 0
+    const precioAnteriorFecha = monedaRows[0].precio_actual_fecha ?? null
+    //ACTUALIZAMOS LA TASA EN LA TABLA TIPO_MONEDA
+    await pool.query(
+      `UPDATE tipo_moneda
+       SET precio_anterior_monto = ?,
+           precio_anterior_fecha = ?,
+           precio_venta_moneda_nacional = ?,
+           precio_actual_fecha = NOW()
+       WHERE keycodigo = ?`,
+      [precioAnteriorMonto, precioAnteriorFecha, tasa, tipoMonedaId]
+    )
+
+    await pool.query(
+      `UPDATE tipo_tasa_cambiaria 
+       SET monto_moneda_nacional = ?, updated_at = NOW() 
+       WHERE tipo_moneda_id = ?`,
+      [tasa, tipoMonedaId]
+    )
+
+    await pool.query(
+      `UPDATE tipo_moneda_historial_tasa
+       SET fecha = ?, tipo_moneda_id = ?, tasa_de_cambio = ?
+       WHERE id = ?`,
+      [fecha, tipoMonedaId, tasa, idRegistro]
+    )
+
+    res.json({ mensaje: 'Tasa actualizada' })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'Error al editar la tasa' })
+  }
+}
+
 export const registrarHistorialTasaTipoMoneda = async (req, res) => {
   try {
     const { tipo_moneda_id, tasa_de_cambio, fecha } = req.body
@@ -1231,7 +1315,19 @@ export const registrarHistorialTasaTipoMoneda = async (req, res) => {
     if (!tipoMonedaId || Number.isNaN(tasa) || !fecha) {
       return res.status(400).json({ error: 'Faltan parámetros o formato incorrecto' })
     }
+    //validamos que no exista un registro duplicado
+    const [duplicadoRows] = await pool.query(
+      `SELECT id FROM tipo_moneda_historial_tasa
+       WHERE fecha = ? AND tipo_moneda_id = ? AND tasa_de_cambio = ?
+       LIMIT 1`,
+      [fecha, tipoMonedaId, tasa]
+    )
 
+    if (duplicadoRows.length > 0) {
+      
+      return res.status(409).json({ error: 'Ya existe un registro con la misma fecha, moneda y tasa' })
+    }
+    //buscamos los valores anteriores de la tasa
     const [monedaRows] = await pool.query(
       `SELECT precio_venta_moneda_nacional, precio_actual_fecha FROM tipo_moneda WHERE keycodigo = ?`,
       [tipoMonedaId]

@@ -21,6 +21,14 @@ type HistorialTasa = {
     nombre_singular?: string;
 };
 
+const formatearFecha = (fechaIso: string) => {
+    if (!fechaIso) return "";
+    const soloFecha = fechaIso.split("T")[0];
+    const [anio, mes, dia] = soloFecha.split("-");
+    if (!anio || !mes || !dia) return fechaIso;
+    return `${dia}/${mes}/${anio}`;
+};
+
 const HistorialDolar: React.FC = () => {
     const { empresaActual } = useAuth();
     const [abierto, setAbierto] = React.useState(false);
@@ -29,6 +37,7 @@ const HistorialDolar: React.FC = () => {
     const [tipos, setTipos] = React.useState<TipoMoneda[]>([]);
     const [historial, setHistorial] = React.useState<HistorialTasa[]>([]);
     const [tasaApi, setTasaApi] = React.useState<number | null>(null);
+    const [editandoId, setEditandoId] = React.useState<number | null>(null);
     const [form, setForm] = React.useState({
         tipo_moneda_id: "",
         tasa_de_cambio: "",
@@ -36,12 +45,21 @@ const HistorialDolar: React.FC = () => {
     });
 
     React.useEffect(() => {
-        if (tasaApi === null) return;
+        if (tasaApi === null || editandoId) return;
         setForm((prev) => ({
             ...prev,
             tasa_de_cambio: String(tasaApi),
         }));
-    }, [tasaApi]);
+    }, [tasaApi, editandoId]);
+
+    const resetearFormulario = React.useCallback(() => {
+        setForm((prev) => ({
+            ...prev,
+            tasa_de_cambio: "",
+            fecha: new Date().toISOString().slice(0, 10),
+        }));
+        setEditandoId(null);
+    }, []);
 
     const cargarDatos = React.useCallback(async () => {
         if (!empresaActual?.id) return;
@@ -85,20 +103,31 @@ const HistorialDolar: React.FC = () => {
         try {
             setLoading(true);
             setError(null);
-            await axios.post(
-                buildApiUrl("/finanzas/tipo-moneda-historial"),
-                {
-                    tipo_moneda_id: Number(form.tipo_moneda_id),
-                    tasa_de_cambio: Number(form.tasa_de_cambio),
-                    fecha: form.fecha,
-                },
-                { withCredentials: true }
-            );
+            const payload = {
+                tipo_moneda_id: Number(form.tipo_moneda_id),
+                tasa_de_cambio: Number(form.tasa_de_cambio),
+                fecha: form.fecha,
+            };
+
+            if (editandoId) {
+                await axios.put(
+                    buildApiUrl(`/finanzas/tipo-moneda-historial/${editandoId}`),
+                    payload,
+                    { withCredentials: true }
+                );
+            } else {
+                await axios.post(
+                    buildApiUrl("/finanzas/tipo-moneda-historial"),
+                    payload,
+                    { withCredentials: true }
+                );
+            }
+
             await cargarDatos();
-            setForm((prev) => ({ ...prev, tasa_de_cambio: "" }));
+            resetearFormulario();
         } catch (err) {
             console.error("Error al registrar tasa", err);
-            setError("No se pudo registrar la tasa");
+            setError(editandoId ? "No se pudo editar la tasa" : "No se pudo registrar la tasa");
         } finally {
             setLoading(false);
         }
@@ -186,12 +215,22 @@ const HistorialDolar: React.FC = () => {
                                 </div>
 
                                 <div className="md:col-span-3 flex justify-end">
+                                    {editandoId && (
+                                        <button
+                                            type="button"
+                                            className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 mr-2"
+                                            onClick={resetearFormulario}
+                                            disabled={loading}
+                                        >
+                                            Cancelar edición
+                                        </button>
+                                    )}
                                     <button
                                         type="submit"
                                         className="px-3 py-2 text-xs font-bold rounded-lg bg-red-700 text-white hover:bg-red-800 disabled:opacity-50"
                                         disabled={loading}
                                     >
-                                        Guardar tasa
+                                        {editandoId ? "Guardar cambios" : "Guardar tasa"}
                                     </button>
                                 </div>
                             </form>
@@ -204,24 +243,41 @@ const HistorialDolar: React.FC = () => {
                                                 <th className="px-3 py-2 text-left">Fecha</th>
                                                 <th className="px-3 py-2 text-left">Moneda</th>
                                                 <th className="px-3 py-2 text-right">Tasa</th>
+                                                <th className="px-3 py-2 text-right">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {historial.length === 0 ? (
                                                 <tr>
-                                                    <td className="px-3 py-3 text-slate-400" colSpan={3}>
+                                                    <td className="px-3 py-3 text-slate-400" colSpan={4}>
                                                         {loading ? "Cargando..." : "Sin registros"}
                                                     </td>
                                                 </tr>
                                             ) : (
                                                 historial.map((h) => (
                                                     <tr key={h.id} className="hover:bg-slate-50">
-                                                        <td className="px-3 py-2">{h.fecha}</td>
+                                                        <td className="px-3 py-2">{formatearFecha(h.fecha)}</td>
                                                         <td className="px-3 py-2">
                                                             {h.abreviatura ?? h.nombre_singular ?? h.tipo_moneda_id}
                                                         </td>
                                                         <td className="px-3 py-2 text-right font-mono">
                                                             {Number(h.tasa_de_cambio).toFixed(4)}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-right">
+                                                            <button
+                                                                type="button"
+                                                                className="text-[10px] font-bold text-blue-700 hover:text-blue-900"
+                                                                onClick={() => {
+                                                                    setEditandoId(h.id);
+                                                                    setForm({
+                                                                        tipo_moneda_id: String(h.tipo_moneda_id),
+                                                                        tasa_de_cambio: String(h.tasa_de_cambio),
+                                                                        fecha: h.fecha,
+                                                                    });
+                                                                }}
+                                                            >
+                                                                Editar
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 ))
