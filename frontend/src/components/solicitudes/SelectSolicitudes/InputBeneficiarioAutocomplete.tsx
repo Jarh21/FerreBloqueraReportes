@@ -50,7 +50,8 @@ const InputBeneficiarioAutocomplete: React.FC<Props> = ({ onSelect, className, d
                 // Ajusta la URL base según tu configuración global de axios o escribe la completa
                 // IMPORTANTE: Asegúrate de que tu axios instance tenga el token configurado, 
                 // o agrega los headers aquí manualmente.
-                const response = await axios.get('http://localhost:4500/api/solicitudes/buscar-beneficiario', {
+                
+                const response = await axios.get(buildApiUrl('/solicitudes/buscar-beneficiario'), {
                     params: { term: query },
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
