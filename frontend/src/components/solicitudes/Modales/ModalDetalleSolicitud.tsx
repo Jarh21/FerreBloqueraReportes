@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { buildApiUrl } from '../../../config/api';
 
-const API_BASE_URL = 'http://localhost:4500'; 
+const API_BASE_URL = buildApiUrl
 
 interface ModalDetalleSolicitudProps {
     isOpen: boolean;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { buildApiUrl } from '../../../config/api';
 
 // Definimos la interfaz de lo que devuelve tu Backend
 interface BeneficiarioBuscado {
