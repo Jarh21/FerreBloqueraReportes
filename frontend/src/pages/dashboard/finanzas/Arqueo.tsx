@@ -388,8 +388,13 @@ const Arqueo: React.FC = () => {
         <div className="p-6 bg-gray-50 min-h-screen">
   {/* Encabezado Principal */}
   <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-    <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Registro de Arqueo</h1>
-    <p className="text-slate-500 mt-1">Gestión y control de flujo de caja diario.</p>
+    <div>
+      <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+        <span className="w-2 h-8 bg-red-700 rounded-full"></span>
+        Registro de Arqueo
+      </h2>
+      <p className="text-slate-500 text-sm">Gestión y control de flujo de caja diario.</p>
+    </div>    
     <div className="flex items-end gap-4">
       <HistorialDolar />
     </div>
