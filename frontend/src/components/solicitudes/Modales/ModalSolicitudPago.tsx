@@ -3,8 +3,9 @@ import InputBancosAutocomplete from '../SelectSolicitudes/InputBancosAutocomplet
 import { useAuth } from '../../../context/AuthContext';
 import SelectorTiposPago from '../SelectSolicitudes/SelectorTipoPago';
 import InputBeneficiarioAutocomplete from '../SelectSolicitudes/InputBeneficiarioAutocomplete';
-import { toast } from 'sonner'; // <--- IMPORTAMOS SONNER
+import { toast } from 'sonner';
 import { buildApiUrl } from '../../../config/api';
+
 const TIPOS_PAGO = {
   BINANCE: "BINANCE",
   TRANSFERENCIA: "TRANSFERENCIA",
@@ -21,7 +22,7 @@ interface ModalSolicitudPagoProps {
     onClose: () => void;
     onSave: (formData: any, estadoPago?: number, soloRegistro?: boolean) => void;
     empresaId?: number | string;
-    tasaBCV?: number;
+    tasaBCV?: number;  // Tasa de respaldo (hardcoded)
     tasaEuro?: number;
 }
 
@@ -40,6 +41,10 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
   const [moneda, setMoneda] = useState<'USD' | 'VES'>('USD');
   const [origenTasa, setOrigenTasa] = useState<'BCV' | 'EURO' | 'MANUAL'>('BCV');
   const [accionBoton, setAccionBoton] = useState<'guardar' | 'pagar'>('guardar');
+
+  // ESTADOS PARA LA TASA API
+  const [tasaBCVEnLinea, setTasaBCVEnLinea] = useState<number | null>(null);
+  const [cargandoTasa, setCargandoTasa] = useState(false);
 
   const [rifPrefijo, setRifPrefijo] = useState('V');
   const [rifNumero, setRifNumero] = useState('');
@@ -64,37 +69,52 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     comprobante: null as File | null
   });
 
+  // 1. CONSUMO DE API (DolarApi Venezuela)
+  useEffect(() => {
+    if (isOpen) {
+        const fetchTasa = async () => {
+            setCargandoTasa(true);
+            try {
+                // Consultamos la API pública
+                const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+                if (!response.ok) throw new Error('Error al obtener tasa');
+                
+                const data = await response.json();
+                
+                // La API retorna objeto { promedio: 123.45, ... }
+                if (data && data.promedio) {
+                    setTasaBCVEnLinea(parseFloat(data.promedio));
+                }
+            } catch (error) {
+                console.warn("No se pudo obtener la tasa en línea, usando defecto.", error);
+                // Si falla, no hacemos nada, se usará la prop tasaBCV por defecto
+            } finally {
+                setCargandoTasa(false);
+            }
+        };
+        fetchTasa();
+    }
+  }, [isOpen]);
+
   // Limpiar formulario al cambiar de pestaña
   useEffect(() => {
-    setAgregarAExistente(false);
-    setRifPrefijo('V');
-    setRifNumero('');
-    
-    setFormData(prev => ({
-        ...prev,
-        beneficiario_id_seleccionado: '',
-        beneficiario_nombre: '',
-        beneficiario_rif: '',
-        beneficiario_banco: '',
-        beneficiario_telefono: '',
-        beneficiario_cuenta: '',
-        beneficiario_email: '',
-        tipo_pago: '',
-        monto: 0,
-        concepto: ''
-    }));
+    handleLimpiarCampos();
   }, [modoBeneficiario]);
 
-  // Sincronizar RIF
+  // Sincronizar RIF visual
   useEffect(() => {
     const rifCompleto = rifNumero ? `${rifPrefijo}-${rifNumero}` : '';
     setFormData(prev => ({ ...prev, beneficiario_rif: rifCompleto }));
   }, [rifPrefijo, rifNumero]);
 
-  // Efecto Tasa
+  // 2. EFECTO TASA MEJORADO (Prioriza la tasa en línea)
   useEffect(() => {
     let nuevaTasa = formData.tasa;
-    if (origenTasa === 'BCV') nuevaTasa = tasaBCV;
+    
+    if (origenTasa === 'BCV') {
+        // AQUÍ ESTÁ LA MAGIA: Si tenemos tasa de la API, úsala. Si no, usa la prop.
+        nuevaTasa = tasaBCVEnLinea || tasaBCV;
+    }
     else if (origenTasa === 'EURO') nuevaTasa = tasaEuro;
 
     if (origenTasa !== 'MANUAL' && moneda === 'VES') {
@@ -107,12 +127,11 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     } else {
         setFormData(prev => ({ ...prev, tasa: nuevaTasa }));
     }
-  }, [origenTasa, tasaBCV, tasaEuro, moneda]);
+  }, [origenTasa, tasaBCV, tasaEuro, moneda, tasaBCVEnLinea]); // Agregamos tasaBCVEnLinea a dependencias
 
   // --- FILTROS DE INPUTS (SOLO NÚMEROS) ---
   const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>) => {
       const { name, value } = e.target;
-      // Regex: Solo permite dígitos del 0 al 9. Elimina todo lo demás.
       const valorLimpio = value.replace(/[^0-9]/g, '');
       setFormData(prev => ({ ...prev, [name]: valorLimpio }));
   };
@@ -122,16 +141,42 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleLimpiarCampos = () => {
+      setRifPrefijo('V');
+      setRifNumero('');
+      setGuardarBeneficiario(false);
+      setAgregarAExistente(false);
+      
+      setFormData(prev => ({
+          ...prev,
+          beneficiario_id_seleccionado: '',
+          beneficiario_nombre: '',
+          beneficiario_rif: '',
+          beneficiario_banco: '',
+          beneficiario_telefono: '',
+          beneficiario_cuenta: '',
+          beneficiario_email: '',
+          tipo_pago: '',
+          monto: 0,
+          concepto: ''
+      }));
+  };
+
   const handleBeneficiarioSeleccionado = (item: any) => {
       let p = 'V';
       let n = '';
-      if (item.rif && item.rif.includes('-')) {
+      
+      const esRifVirtual = item.rif && (item.rif.startsWith('ZELLE-') || item.rif.startsWith('BINANCE-'));
+
+      if (!esRifVirtual && item.rif && item.rif.includes('-')) {
           const partes = item.rif.split('-');
           if (PREFIJOS_RIF.includes(partes[0])) {
               p = partes[0];
               n = partes[1];
           } else { n = item.rif; }
-      } else { n = item.rif || ''; }
+      } else if (!esRifVirtual) { 
+          n = item.rif || ''; 
+      }
       
       setRifPrefijo(p);
       setRifNumero(n);
@@ -218,13 +263,31 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
         return;
     }
 
+    let rifFinal = formData.beneficiario_rif;
+    const esDigital = ['ZELLE', 'BINANCE'].includes(formData.tipo_pago);
+
+    if (modoBeneficiario !== 'registrado') {
+        if (esDigital) {
+            if (!formData.beneficiario_email) {
+                toast.error("Falta Identificador", { description: "Para Zelle o Binance el correo/ID es obligatorio." });
+                return;
+            }
+            rifFinal = `${formData.tipo_pago}-${formData.beneficiario_email}`;
+        } else if (formData.tipo_pago !== 'EFECTIVO USD') {
+            if (!rifNumero) {
+                toast.error("Falta Documento", { description: "El número de Cédula/RIF es obligatorio para este método." });
+                return;
+            }
+        }
+    }
+
     setLoading(true);
 
     const payload = {
         modo_beneficiario: modoBeneficiario, 
         guardar_en_directorio: guardarBeneficiario,
         beneficiario_nombre: formData.beneficiario_nombre,
-        beneficiario_rif: formData.beneficiario_rif, 
+        beneficiario_rif: rifFinal, 
         beneficiario_email: formData.beneficiario_email,
         beneficiario_telefono: formData.beneficiario_telefono,
         beneficiario_cuenta: formData.beneficiario_cuenta,
@@ -254,17 +317,13 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
         const data = await response.json();
 
         if (response.ok) {
-            // ÉXITO CON SONNER
             toast.success(modoBeneficiario === 'solo_registro' ? "Directorio Actualizado" : "Solicitud Creada", {
-                description: modoBeneficiario === 'solo_registro' 
-                    ? "El beneficiario ha sido guardado exitosamente." 
-                    : `Solicitud #${data.id || ''} registrada correctamente.`
+                description: `Operación exitosa. ${data.id ? 'ID: #'+data.id : ''}`
             });
             
             if (onSave) onSave(formData, payload.estado_pago, modoBeneficiario === 'solo_registro');
             onClose();
         } else {
-            // ERROR DE API
             toast.error("Error al guardar", { description: data.message || 'No se pudo procesar la solicitud' });
         }
     } catch (error) {
@@ -298,7 +357,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
               </select>
               <input
                   value={rifNumero}
-                  // CAMBIO: Filtro numérico en RIF
                   onChange={(e) => setRifNumero(e.target.value.replace(/[^0-9]/g, ''))}
                   disabled={camposIdentidadBloqueados}
                   className={`w-full p-2.5 border border-l-0 border-slate-200 rounded-r-lg text-sm outline-none transition-all font-mono ${camposIdentidadBloqueados ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-red-700'}`}
@@ -357,10 +415,9 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 {renderRifInput()}
                 <div className="space-y-1">
                     <label className={labelClass}>Teléfono</label>
-                    {/* CAMBIO: Usamos handleNumericInput */}
                     <input 
                         name="beneficiario_telefono" 
-                        value={formData.beneficiario_telefono} 
+                        value={formData.beneficiario_telefono || ''} 
                         onChange={handleNumericInput} 
                         className={inputClass} 
                         placeholder="04141234567"
@@ -378,10 +435,9 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 <div className="space-y-1"><label className={labelClass}>Banco</label><InputBancosAutocomplete name="beneficiario_banco" value={formData.beneficiario_banco} onChange={handleChange} className={inputClass} /></div>
                 <div className="space-y-1 md:col-span-2">
                     <label className={labelClass}>Nro Cuenta</label>
-                    {/* CAMBIO: Usamos handleNumericInput */}
                     <input 
                         name="beneficiario_cuenta" 
-                        value={formData.beneficiario_cuenta} 
+                        value={formData.beneficiario_cuenta || ''} 
                         maxLength={20} 
                         onChange={handleNumericInput} 
                         className={inputClass} 
@@ -410,6 +466,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            
             {/* Slider Modo */}
             <div className="md:col-span-3 flex justify-center mb-4">
                 <div className={`bg-slate-100 p-0.5 rounded-lg inline-flex shadow-inner ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -572,7 +629,17 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                             className={`w-full p-2.5 border border-l-0 border-slate-200 rounded-r-lg text-sm outline-none transition-all ${origenTasa !== 'MANUAL' ? 'bg-slate-50 text-slate-500' : 'bg-white text-slate-800 focus:ring-2 focus:ring-red-700'}`} 
                                         />
                                     </div>
-                                    {origenTasa === 'BCV' && <p className="text-[10px] text-slate-400 mt-0.5 ml-1">Tasa oficial del día: {tasaBCV}</p>}
+                                    {origenTasa === 'BCV' && (
+                                        <div className="flex justify-between items-center mt-0.5 ml-1">
+                                            {cargandoTasa ? (
+                                                <span className="text-[10px] text-blue-500 animate-pulse">Obteniendo tasa oficial...</span>
+                                            ) : (
+                                                <p className="text-[10px] text-slate-400">
+                                                    {tasaBCVEnLinea ? `✅ Tasa Oficial en línea` : `⚠️ Tasa por defecto: ${tasaBCV}`}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="space-y-1">
@@ -596,29 +663,52 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
             )}
 
             {/* Footer y Botones */}
-            <div className="md:col-span-3 flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                <button type="button" onClick={onClose} disabled={loading} className="px-6 py-2 rounded-lg text-slate-600 font-medium hover:bg-slate-50 disabled:opacity-50">Cancelar</button>
+            <div className="md:col-span-3 flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
                 
-                <button 
-                    type="submit" 
-                    onClick={() => setAccionBoton('guardar')}
-                    disabled={loading}
-                    className={`bg-red-700 text-white px-8 py-2 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 active:scale-95 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                    {loading ? 'Procesando...' : (modoBeneficiario === 'solo_registro' ? 'Guardar Beneficiario' : 'Guardar Solicitud')}
-                </button>
+                {/* BOTÓN PAPELERA (IZQUIERDA) */}
+                <div>
+                    {(modoBeneficiario === 'nuevo' || modoBeneficiario === 'registrado') && (
+                        <button 
+                            type="button" 
+                            onClick={handleLimpiarCampos}
+                            className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full transition-all group"
+                            title="Limpiar todos los campos"
+                        >
+                            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg> Limpiar campos
+                           
+                        </button>
+                    )}
+                </div>
 
-                {modoBeneficiario !== 'solo_registro' && formData.tipo_pago === TIPOS_PAGO.EFECTIVO && (
+                {/* BOTONES DE ACCIÓN (DERECHA) */}
+                <div className="flex gap-3">
+                    <button type="button" onClick={onClose} disabled={loading} className="px-6 py-2 rounded-lg text-slate-600 font-medium hover:bg-slate-50 disabled:opacity-50">
+                        Cancelar
+                    </button>
+                    
                     <button 
                         type="submit" 
-                        onClick={() => setAccionBoton('pagar')}
+                        onClick={() => setAccionBoton('guardar')}
                         disabled={loading}
-                        className={`bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700 shadow-lg shadow-green-100 active:scale-95 flex items-center gap-2 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`bg-red-700 text-white px-8 py-2 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 active:scale-95 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                        {!loading && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z" /></svg>}
-                        {loading ? 'Pagando...' : 'Pagar Ahora'}
+                        {loading ? 'Procesando...' : (modoBeneficiario === 'solo_registro' ? 'Guardar Beneficiario' : 'Guardar Solicitud')}
                     </button>
-                )}
+
+                    {modoBeneficiario !== 'solo_registro' && formData.tipo_pago === TIPOS_PAGO.EFECTIVO && (
+                        <button 
+                            type="submit" 
+                            onClick={() => setAccionBoton('pagar')}
+                            disabled={loading}
+                            className={`bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700 shadow-lg shadow-green-100 active:scale-95 flex items-center gap-2 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {!loading && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z" /></svg>}
+                            {loading ? 'Pagando...' : 'Pagar Ahora'}
+                        </button>
+                    )}
+                </div>
             </div>
         </form>
       </div>

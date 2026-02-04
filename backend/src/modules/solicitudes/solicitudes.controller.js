@@ -5,19 +5,15 @@ import { pool } from "../../config/database.js";
 // ----------------------------------------------------
 export const CrearSolicitud = async (req, res) => {
     
-    // Iniciamos conexión
     const connection = await pool.getConnection();
     
     try {
         await connection.beginTransaction();
 
-        // 1. OBTENER DATOS
         const {
-            // Flags de control
             modo_beneficiario,      
-            guardar_en_directorio,  
+            guardar_en_directorio,  // <--- Este es el booleano clave
             
-            // Datos del Beneficiario
             beneficiario_nombre,
             beneficiario_rif,
             beneficiario_email,
@@ -25,7 +21,6 @@ export const CrearSolicitud = async (req, res) => {
             beneficiario_cuenta,
             beneficiario_banco,
             
-            // Datos de la Solicitud
             tipo_pago, 
             solicitante,
             empresa_id,
@@ -38,10 +33,7 @@ export const CrearSolicitud = async (req, res) => {
             estado_pago 
         } = req.body;
 
-        // ----------------------------------------------------
-        // PASO 1: SANITIZACIÓN Y UNIFICACIÓN
-        // ----------------------------------------------------
-        
+        // 1. SANITIZACIÓN
         const rifLimpio = beneficiario_rif ? beneficiario_rif.trim().toUpperCase() : '';
         const nombreLimpio = beneficiario_nombre ? beneficiario_nombre.trim() : '';
 
@@ -51,28 +43,21 @@ export const CrearSolicitud = async (req, res) => {
         else if (tipo_pago === 'TRANSFERENCIA') identificador = beneficiario_cuenta ? beneficiario_cuenta.trim() : '';
         else identificador = 'N/A'; 
 
-        // Validación básica
-        if (modo_beneficiario === 'registrado') {
-            if (!nombreLimpio || !rifLimpio) {
-                await connection.rollback();
-                connection.release();
-                return res.status(400).json({ message: "Faltan datos del beneficiario." });
-            }
-        }
-
-        // ----------------------------------------------------
-        // PASO 2: GESTIÓN DE BENEFICIARIO (BUSCAR O CREAR)
-        // ----------------------------------------------------
+        // 2. GESTIÓN DE BENEFICIARIO
         let beneficiarioId = null;
 
-        // A. Buscar por RIF
+        // A. Buscar si ya existe (Siempre intentamos buscarlo por si acaso)
         if (rifLimpio) {
             const [existingUser] = await connection.query("SELECT id FROM beneficiarios WHERE rif = ?", [rifLimpio]);
             if (existingUser.length > 0) beneficiarioId = existingUser[0].id;
         }
 
-        // B. Crear si no existe
-        if (!beneficiarioId && (modo_beneficiario === 'nuevo' || modo_beneficiario === 'solo_registro' || modo_beneficiario === 'registrado')) {
+        // --- CORRECCIÓN AQUÍ ---
+        // Definimos si realmente tenemos permiso para guardar en la BD maestra
+        const debeGuardar = modo_beneficiario === 'solo_registro' || (modo_beneficiario === 'nuevo' && guardar_en_directorio);
+
+        // B. Crear SOLO si no existe Y tenemos permiso de guardar
+        if (!beneficiarioId && debeGuardar) {
              const [result] = await connection.query(
                 "INSERT INTO beneficiarios (nombre, rif) VALUES (?, ?)",
                 [nombreLimpio, rifLimpio]
@@ -81,7 +66,8 @@ export const CrearSolicitud = async (req, res) => {
         }
 
         // C. Gestión de la Cuenta Bancaria
-        if (beneficiarioId && (modo_beneficiario === 'solo_registro' || guardar_en_directorio) && tipo_pago !== 'EFECTIVO USD') {
+        // Solo entramos aquí si tenemos un beneficiarioId válido (ya existía o se acaba de crear porque debíamos guardar)
+        if (beneficiarioId && debeGuardar && tipo_pago !== 'EFECTIVO USD') {
             const [cuentas] = await connection.query(
                 "SELECT id FROM beneficiarios_cuentas WHERE beneficiario_id = ? AND tipo_pago = ? AND identificador = ?",
                 [beneficiarioId, tipo_pago, identificador]
@@ -92,54 +78,32 @@ export const CrearSolicitud = async (req, res) => {
                     "INSERT INTO beneficiarios_cuentas (beneficiario_id, tipo_pago, banco, identificador) VALUES (?, ?, ?, ?)",
                     [beneficiarioId, tipo_pago, beneficiario_banco || null, identificador]
                 );
-            } else if (modo_beneficiario === 'solo_registro') {
-                await connection.commit(); 
-                connection.release();
-                return res.status(200).json({ success: true, message: "El beneficiario ya tenía esta cuenta registrada." });
             }
         }
 
-        // ----------------------------------------------------
-        // PASO 3: INTERRUPCIÓN SI ES "SOLO REGISTRO"
-        // ----------------------------------------------------
+        // 3. SI ERA SOLO REGISTRO, TERMINAMOS AQUÍ
         if (modo_beneficiario === 'solo_registro') {
             await connection.commit();
             return res.status(200).json({ success: true, message: "Beneficiario agregado al directorio correctamente." });
         }
 
-        // ----------------------------------------------------
-        // PASO 4: CREAR LA SOLICITUD / SNAPSHOT
-        // ----------------------------------------------------
-        
+        // 4. CREAR LA SOLICITUD (Esto siempre ocurre, se guarde o no el beneficiario)
         const querySolicitud = `
             INSERT INTO detalles_solicitudes 
             (
-                solicitante, 
-                empresa_id, 
-                concepto, 
-                beneficiario_nombre, 
-                beneficiario_rif, 
-                beneficiario_banco, 
-                beneficiario_identificador,
-                tipo_pago,
-                monto, 
-                moneda_pago, 
-                tasa_cambio, 
-                pago_efectivo, 
-                referencia_pago, 
-                banco_origen, 
-                estado_pago
+                solicitante, empresa_id, concepto, 
+                beneficiario_nombre, beneficiario_rif, beneficiario_banco, beneficiario_identificador, tipo_pago,
+                monto, moneda_pago, tasa_cambio, pago_efectivo, referencia_pago, banco_origen, estado_pago
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
-        // CAMBIO 1: Agregamos [resultSolicitud] para capturar el ID insertado
         const [resultSolicitud] = await connection.query(querySolicitud, [
             solicitante,
             empresa_id || 1,
             concepto,
             nombreLimpio,
-            rifLimpio,
+            rifLimpio, // Aquí se guarda el RIF o el RIF Virtual para el historial, independientemente de si se guardó en el directorio
             beneficiario_banco || (tipo_pago === 'ZELLE' ? 'ZELLE' : null),
             identificador,
             tipo_pago,
@@ -152,36 +116,31 @@ export const CrearSolicitud = async (req, res) => {
             estado_pago || 0
         ]);
 
-        // ----------------------------------------------------
-        // PASO 5: NOTIFICACIÓN PUSH (SOCKET.IO)
-        // ----------------------------------------------------
-        // CAMBIO 2: Emitimos el evento a todos los clientes conectados
+        // 5. NOTIFICACIÓN PUSH
         if (req.io) {
             req.io.emit('nueva_solicitud', {
-                id: resultSolicitud.insertId, // ID de la solicitud recién creada
+                id: resultSolicitud.insertId,
                 mensaje: `Nueva solicitud creada por ${solicitante}`,
                 monto: monto,
                 moneda: moneda
             });
-            console.log("🔔 Notificación Socket emitida: nueva_solicitud");
         }
 
         await connection.commit();
         res.status(200).json({ 
             success: true, 
             message: "Solicitud de pago creada exitosamente.",
-            id: resultSolicitud.insertId // Devolvemos el ID por si el frontend lo necesita
+            id: resultSolicitud.insertId 
         });
 
     } catch (error) {
         await connection.rollback();
         console.error("Error en CrearSolicitud:", error);
-        res.status(500).json({ success: false, message: "Error al procesar la solicitud", error: error.message });
+        res.status(500).json({ success: false, message: "Error de Beneficiario: Usuario ya existe", error: error.message });
     } finally {
         connection.release();
     }
 };
-
 
 // ----------------------------------------------------
 // OBTENER LISTADO (GET)
