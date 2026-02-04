@@ -312,6 +312,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 'Authorization': `Bearer ${localStorage.getItem('token')}` 
             },
             body: JSON.stringify(payload)
+            
         });
 
         const data = await response.json();
@@ -323,6 +324,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
             
             if (onSave) onSave(formData, payload.estado_pago, modoBeneficiario === 'solo_registro');
             onClose();
+            
         } else {
             toast.error("Error al guardar", { description: data.message || 'No se pudo procesar la solicitud' });
         }

@@ -19,14 +19,10 @@ const app = express()
 const httpServer = createServer(app); 
 
 const allowedOrigins = [  
-
-
-  process.env.FRONTEND_URL+':'+process.env.FRONTEND_PORT,
-  "10.10.1.186:3010",
-  "10.10.1.186:80",
+  process.env.FRONTEND_URL+':'+process.env.FRONTEND_PORT, // Asegúrate que env tenga http://
+  "http://10.10.1.186:3010", // <--- AGREGADO http://
+  "http://10.10.1.186:80",   // <--- AGREGADO http://
   "http://10.10.7.100:80"
-  // Puedes agregar más orígenes aquí
-
 ];
 
 // Configuración de CORS para Express (HTTP)
