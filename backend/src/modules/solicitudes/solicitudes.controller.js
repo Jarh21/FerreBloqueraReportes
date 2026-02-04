@@ -337,3 +337,52 @@ export const ProcesarPago = async (req, res) => {
         connection.release();
     }
 };
+
+// solicitudes.controller.js
+
+export const AnularSolicitud = async (req, res) => {
+    const { id } = req.params;
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // 1. Verificar estado actual
+        const [solicitud] = await connection.query(
+            "SELECT estado_pago, solicitante FROM detalles_solicitudes WHERE id = ?", 
+            [id]
+        );
+
+        if (solicitud.length === 0) {
+            return res.status(404).json({ message: "Solicitud no encontrada" });
+        }
+
+        if (solicitud[0].estado_pago === 1) {
+            return res.status(400).json({ message: "No se puede anular una solicitud que ya está PAGADA." });
+        }
+
+        // 2. Actualizar estado a 2 (ANULADO)
+        await connection.query(
+            "UPDATE detalles_solicitudes SET estado_pago = 2 WHERE id = ?",
+            [id]
+        );
+
+        // 3. Notificar a todos por Socket (Para que la tabla se refresque sola)
+        if (req.io) {
+            req.io.emit('solicitud_anulada', {
+                id: id,
+                mensaje: `Solicitud #${id} anulada por administración.`
+            });
+        }
+
+        await connection.commit();
+        res.status(200).json({ message: "Solicitud anulada correctamente" });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error(error);
+        res.status(500).json({ message: "Error interno al anular" });
+    } finally {
+        connection.release();
+    }
+};
