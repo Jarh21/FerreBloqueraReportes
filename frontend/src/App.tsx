@@ -2,40 +2,38 @@ import { BrowserRouter as Router } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import AppRoutes from "./routes";
 import React, { useEffect } from 'react';
+import { Toaster, toast } from 'sonner';
+import io from 'socket.io-client'; 
 
+// 1. IMPORTANTE: Importamos SERVER_URL (La raíz), NO buildApiUrl
+import { SERVER_URL } from "./config/api"; 
 
-import { Toaster, toast } from 'sonner'; // Importamos toast también
-import io from 'socket.io-client'; // Importamos el cliente
-
-import { buildApiUrl } from './config/api';
-// Conectamos al backend (Asegúrate de que la URL sea correcta)
-const socket = io(buildApiUrl('/'), {
-
-
+// 2. CORRECCIÓN: Usamos SERVER_URL para el socket
+const socket = io(SERVER_URL, {
     withCredentials: true,
-    autoConnect: true
+    autoConnect: true,
+    transports: ['websocket', 'polling'] // Opcional: ayuda a la compatibilidad
 });
 
 export default function App() {
 
   useEffect(() => {
-      // (Debug opcional) Para ver si conecta
-      socket.on('connect', () => console.log("🟢 Socket Conectado:", socket.id));
-      socket.on('connect_error', (err) => console.error("🔴 Error Socket:", err));
+      // Debuggers para ver si conecta en la consola del navegador (F12)
+      socket.on('connect', () => console.log("🟢 Socket Conectado con ID:", socket.id));
+      socket.on('connect_error', (err) => console.error("🔴 Error conexión Socket:", err.message));
 
-      // 1. Escuchar el evento
       socket.on('nueva_solicitud', (data: any) => {
           
-          // 2. Sonido (Asegúrate que el archivo exista en la carpeta /public)
+          // Audio
           try {
              const audio = new Audio('/notificacion.mp3'); 
-             audio.play().catch(e => console.log("Audio bloqueado (interacción requerida)"));
+             audio.play().catch(e => console.log("Audio bloqueado (falta interacción)"));
           } catch(e) {}
 
-          // 3. Toast
+          // Toast
           toast.info("🔔 Nueva Solicitud Recibida", {
               description: `${data.mensaje}. Monto: ${data.monto} ${data.moneda}`,
-              duration: 8000, 
+              duration: 80000000, 
               action: {
                   label: "Ver",
                   onClick: () => window.location.href = "/consultas" 
@@ -45,8 +43,8 @@ export default function App() {
 
       return () => {
           socket.off('nueva_solicitud');
-          socket.off('connect');     // Limpieza extra
-          socket.off('connect_error'); // Limpieza extra
+          socket.off('connect');
+          socket.off('connect_error');
       };
   }, []);
 
