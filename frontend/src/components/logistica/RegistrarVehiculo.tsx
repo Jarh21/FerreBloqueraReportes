@@ -105,9 +105,9 @@ const RegistrarVehiculo: React.FC<RegistrarVehiculoProps> = ({ onVehiculoGuardad
             <button  
                 type="button"
                 onClick={openModal}
-                className="bg-red-700 text-white px-3 py-1 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 transition-all flex items-center gap-1 active:scale-95 text-xs"
+                className="bg-red-700 text-white px-3 py-2 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 transition-all flex items-center gap-1 active:scale-95 text-xs"
             >
-                + Agregar 
+                + Vehiculo 
             </button>
 
             {isOpen && (

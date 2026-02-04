@@ -232,7 +232,11 @@ const Fletes: React.FC = () => {
       </h2>
       <p className="text-slate-500 text-sm">Consulta, filtrado y despacho de fletes vehiculares</p>
     </div>
-    <HistorialDolar />
+    <div className="flex items-end gap-4">
+      {validarModulo('Logistica.Fletes.RegistrarVehiculo') ? <RegistrarVehiculo onVehiculoGuardado={handlelistarVehiculos} /> : null}
+      <HistorialDolar />
+    </div>
+    
     {/* Acción secundaria integrada en el label del filtro abajo, o aquí si prefieres un acceso rápido */}
   </div>
 
@@ -277,7 +281,7 @@ const Fletes: React.FC = () => {
       <div className="lg:col-span-7 space-y-1">
         <div className="flex justify-between items-center mb-1 px-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vehículo</label>
-          {validarModulo('Logistica.Fletes.RegistrarVehiculo') ? <RegistrarVehiculo onVehiculoGuardado={handlelistarVehiculos} /> : null}
+          
         </div>
         <Select<VehiculoOption, true>
           isMulti
@@ -335,7 +339,11 @@ const Fletes: React.FC = () => {
           <tbody className="divide-y divide-slate-100">
             {fletes.map((flete, index) => {
               const isSelected = fletesSeleccionados.some(f => f.keycodigo === flete.keycodigo);
+              if (flete.total < 1) {
+                return null; // Saltar fletes con total negativo
+              }
               return (
+                
                 <tr key={index} className={`transition-colors hover:bg-slate-50 ${isSelected ? 'bg-blue-50/50' : ''}`}>
                   <td className="px-4 py-3">
                     <div className="font-bold text-slate-700">{flete.fecha}</div>
@@ -379,7 +387,8 @@ const Fletes: React.FC = () => {
   </div>
   <div className="grid grid-cols-4 md:grid-cols-2 lg:grid-cols-12 gap-6 items-end pt-6">
   {/* Selector de Cuenta y Enviar */}
-      <div className="lg:col-span-12 flex flex-col gap-2 border-l border-slate-200 pl-6 ml-auto w-full">
+  {fletes.length === 0 ? null : (
+    <div className="lg:col-span-12 flex flex-col gap-2 border-l border-slate-200 pl-6 ml-auto w-full">
         
         <div className="flex gap-2">
           <div className="flex-1">
@@ -426,6 +435,8 @@ const Fletes: React.FC = () => {
           </button>
         </div>
       </div>
+  )}
+      
   </div>
 </div>
     );
