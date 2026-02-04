@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from "../../../context/AuthContext";
-import { buildApiUrl, SERVER_URL } from '../../../config/api'; // <--- IMPORTAMOS SERVER_URL
+import { buildApiUrl, SERVER_URL } from '../../../config/api'; 
 import axios from 'axios';
-import { toast } from 'sonner'; // <--- Usamos Sonner para consistencia
-import io from 'socket.io-client'; // <--- IMPORTAMOS SOCKET
+import { toast } from 'sonner'; 
+import io from 'socket.io-client'; 
 
 // IMPORTAMOS LOS MODALES
 import ModalSolicitudPago from '../../../components/solicitudes/Modales/ModalSolicitudPago';
@@ -17,69 +17,62 @@ const GestionPagos: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [solicitudes, setSolicitudes] = useState<any[]>([]);
   
-  // Estado para Modal CREAR
+  // Estados de Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Estado para Modal PROCESAR
   const [isProcesarModalOpen, setIsProcesarModalOpen] = useState(false);
-  
-  // Estado para Modal DETALLES
   const [isDetalleOpen, setIsDetalleOpen] = useState(false);
-  
-  // Solicitud seleccionada
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<any>(null);
   
   // 1. CARGA INICIAL
   useEffect(() => {
     if (empresaActual?.id) {
-        obtenerSolicitudes();
+        obtenerSolicitudes(false); // False = Muestra loading spinner
     }
   }, [empresaActual?.id]);
 
-  // 2. ESCUCHA EN TIEMPO REAL (SOCKET.IO)
+  // 2. SOCKET.IO (REFRESCO SILENCIOSO)
   useEffect(() => {
-      // Conectamos al socket
       const socket = io(SERVER_URL, { withCredentials: true, autoConnect: true });
 
-      // Escuchamos el evento
-      socket.on('nueva_solicitud', (data) => {
-          // Si estamos viendo la empresa correcta (o si no filtras por empresa en el socket)
-          // Refrescamos la lista silenciosamente
-          obtenerSolicitudes(); 
-          
-          // Opcional: Feedback visual discreto
-          toast.info("Lista actualizada", { 
-              description: "Se ha recibido una nueva solicitud.",
-              duration: 3000 
-          });
+      // Evento: Nueva Solicitud
+      socket.on('nueva_solicitud', () => {
+          obtenerSolicitudes(true); // True = Silencioso (sin spinner)
+          toast.info("Nueva solicitud recibida", { position: 'bottom-right' });
       });
 
-      // Limpieza al salir de la pantalla
-      return () => {
-          socket.disconnect();
-      };
-  }, [empresaActual?.id]); // Re-creamos si cambia la empresa
+      // Evento: Solicitud Anulada (Por si otro admin anula algo mientras ves)
+      socket.on('solicitud_anulada', (data: any) => {
+          obtenerSolicitudes(true);
+          if (solicitudSeleccionada?.id == data.id) {
+              setIsProcesarModalOpen(false); // Cierra modales si estabas viendo esa solicitud
+          }
+      });
 
-  const obtenerSolicitudes = async () => {
+      return () => { socket.disconnect(); };
+  }, [empresaActual?.id, solicitudSeleccionada]);
+
+  // 3. FUNCIÓN DE CARGA (MEJORADA)
+  // Agregamos el parametro 'isBackground' para controlar el spinner
+  const obtenerSolicitudes = async (isBackground = false) => {
     if (!empresaActual?.id) return;
 
     try {
-      // Nota: Si es un refresco automático (socket), quizás no quieras activar el loading global
-      // para no parpadear la pantalla, pero por seguridad lo dejamos así.
-      setLoading(true);
+      // Solo mostramos el spinner si NO es una carga en segundo plano
+      if (!isBackground) setLoading(true);
       setError(null);
+
       const endpoint = `/solicitudes/listar/${empresaActual.id}`;
       const response = await axios.get(buildApiUrl(endpoint), {
         withCredentials: true,
-        headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
+      
       let data = Array.isArray(response.data) ? response.data : (response.data?.rows ?? []);
       
-      // --- FILTRO Y ORDENAMIENTO ---
+      // Filtros: Pendientes (0) y Abonados (3)
       data = data.filter((s: any) => s.estado_pago === 0 || s.estado_pago === 3);
 
+      // Ordenamiento: Agrupado por estado, luego por fecha
       data.sort((a: any, b: any) => {
           if (a.estado_pago === b.estado_pago) {
               return new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime();
@@ -91,31 +84,22 @@ const GestionPagos: React.FC = () => {
 
     } catch (err: any) {
       console.error("Error fetching solicitudes:", err);
-      const msg = err?.response?.data?.error || err.message || 'Error al obtener solicitudes';
-      setError(msg);
+      if (!isBackground) setError('Error al obtener solicitudes');
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
-  const handleCrearSolicitud = async (formData: FormData) => {
-    try {
-        // Al crear, la lista se actualizará sola por el Socket, 
-        // pero hacemos un fetch manual por seguridad inmediata.
-        setLoading(true);
-        await obtenerSolicitudes(); 
-        setIsModalOpen(false);
-    } catch (err: any) {
-        const msg = err?.response?.data?.error || err.message || 'Error al guardar solicitud';
-        setError(msg);
-    } finally {
-        setLoading(false);
-    }
+  const handleCrearSolicitud = async () => {
+    // Al guardar, forzamos refresco manual por seguridad
+    await obtenerSolicitudes(true); 
+    setIsModalOpen(false);
   };
 
   const handleProcesarPago = async (idSolicitud: number, datosPago: any) => {
       try {
-          setLoading(true);
+          // Aquí sí mostramos loading porque es una acción del usuario
+          setLoading(true); 
           const formData = new FormData();
           formData.append('id_solicitud', idSolicitud.toString());
           formData.append('banco_origen', datosPago.banco_origen);
@@ -135,10 +119,9 @@ const GestionPagos: React.FC = () => {
               withCredentials: true
           });
 
-          // Feedback moderno
           toast.success(datosPago.es_abono ? "Abono registrado" : "Pago completado");
           setIsProcesarModalOpen(false);
-          obtenerSolicitudes(); 
+          obtenerSolicitudes(true); 
 
       } catch (err: any) {
           console.error(err);
@@ -148,26 +131,25 @@ const GestionPagos: React.FC = () => {
       }
   };
 
-  // Anular Solicitud
+  // Anular Solicitud (Con Toast Promise)
   const handleAnularSolicitud = async (id: number) => {
-      // Usamos confirm nativo, se podría migrar a un modal custom luego
-      const confirmacion = window.confirm("¿Estás seguro de que deseas ANULAR esta solicitud? Esta acción no se puede deshacer.");
+      const confirmacion = window.confirm("¿Estás seguro de ANULAR esta solicitud? Desaparecerá de esta lista.");
       if (!confirmacion) return;
 
-      try {
-          setLoading(true);
-          await axios.post(buildApiUrl(`/solicitudes/anular/${id}`), {}, {
+      toast.promise(
+          axios.post(buildApiUrl(`/solicitudes/anular/${id}`), {}, {
               withCredentials: true,
               headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-          });
-          toast.success("Solicitud anulada");
-          obtenerSolicitudes();
-      } catch (err: any) {
-          console.error(err);
-          toast.error("Error al anular", { description: err.response?.data?.message || err.message });
-      } finally {
-          setLoading(false);
-      }
+          }),
+          {
+              loading: 'Anulando...',
+              success: () => {
+                  obtenerSolicitudes(true);
+                  return 'Solicitud anulada correctamente';
+              },
+              error: (err) => err.response?.data?.message || 'Error al anular'
+          }
+      );
   };
 
   const abrirProcesar = (solicitud: any) => {
@@ -182,8 +164,7 @@ const GestionPagos: React.FC = () => {
 
   const formatoFecha = (fechaStr: string) => {
     if(!fechaStr) return '-';
-    const fecha = new Date(fechaStr);
-    return fecha.toLocaleDateString('es-VE');
+    return new Date(fechaStr).toLocaleDateString('es-VE');
   }
 
   const getStatusBadge = (status: number) => {
@@ -204,7 +185,7 @@ const GestionPagos: React.FC = () => {
           </h2>
           <p className="text-slate-500 text-sm">Bandeja de solicitudes pendientes por procesar</p>
         </div>
-        {validarModulo('Solicitudes.Crear_solicitud') ? (
+        {validarModulo('Solicitudes.Crear_solicitud') && (
             <button 
                 onClick={() => setIsModalOpen(true)}
                 className="bg-red-700 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 transition-all flex items-center gap-2 active:scale-95"
@@ -212,10 +193,10 @@ const GestionPagos: React.FC = () => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                 Nueva Solicitud
             </button>
-        ) : null}
+        )}
       </div>
 
-      {/* Loading & Error */}
+      {/* Loading (Solo aparece en carga inicial manual) */}
       {loading && (
         <div className="flex items-center justify-center py-10 gap-3 text-slate-500">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-700"></div>
@@ -223,15 +204,15 @@ const GestionPagos: React.FC = () => {
         </div>
       )}
       
-      {error && (
+      {error && !loading && (
         <div className="p-4 bg-red-50 border-l-4 border-red-700 text-red-800 rounded-r-lg mb-6 flex items-center gap-2">
           <span className="font-semibold text-sm">{error}</span>
         </div>
       )}
 
       {/* Tabla */}
-      {solicitudes.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+      {!loading && solicitudes.length > 0 ? (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm animate-fade-in-down">
           <table className="min-w-full text-xs text-left">
             <thead className="bg-slate-800 text-slate-200">
               <tr>
@@ -246,12 +227,9 @@ const GestionPagos: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
               {solicitudes.map((sol, index) => {
-                  
-                  // Renderizado condicional de separadores de grupo (Opcional, pero ayuda visualmente)
                   const esPrimerAbonado = sol.estado_pago === 3 && (index === 0 || solicitudes[index - 1].estado_pago !== 3);
-
                   return (
-                    <React.Fragment key={index}>
+                    <React.Fragment key={sol.id || index}>
                         {esPrimerAbonado && (
                              <tr className="bg-blue-50">
                                 <td colSpan={7} className="px-4 py-2 text-blue-800 font-bold text-[10px] uppercase tracking-wider border-y border-blue-100 text-center">
@@ -284,7 +262,7 @@ const GestionPagos: React.FC = () => {
                             <div className="font-bold text-green-700 text-sm">
                                 {Number(sol.monto).toFixed(2)} {sol.moneda_pago === 'VES' ? 'Bs' : '$'}
                             </div>
-                            {sol.total_pagado > 0 && (
+                            {Number(sol.total_pagado) > 0 && (
                                 <div className="text-[9px] text-blue-600 font-bold">Abonado: {Number(sol.total_pagado).toFixed(2)}</div>
                             )}
                         </td>
@@ -294,16 +272,14 @@ const GestionPagos: React.FC = () => {
 
                         <td className="px-4 py-3 text-center">
                             <div className="flex justify-center gap-2">
-                                {/* Botón PROCESAR (Sirve para Pagar completo o Agregar otro abono) */}
                                 <button 
                                     onClick={() => abrirProcesar(sol)}
                                     className="bg-green-100 text-green-700 p-1.5 rounded-md hover:bg-green-200 border border-green-200 transition-colors"
-                                    title={sol.estado_pago === 3 ? "Agregar Abono / Completar" : "Procesar Pago"}
+                                    title={sol.estado_pago === 3 ? "Agregar Abono" : "Procesar Pago"}
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 </button>
                                 
-                                {/* Botón VER DETALLES (Útil para ver comprobantes de abonos previos) */}
                                 <button 
                                     onClick={() => abrirDetalles(sol)}
                                     className="bg-blue-50 text-blue-600 p-1.5 rounded-md hover:bg-blue-100 border border-blue-100 transition-colors"
@@ -312,7 +288,6 @@ const GestionPagos: React.FC = () => {
                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                 </button>
 
-                                {/* Botón ANULAR (Solo si no tiene abonos previos, para evitar descuadres) */}
                                 {sol.estado_pago === 0 && (
                                     <button 
                                         onClick={() => handleAnularSolicitud(sol.id)}
