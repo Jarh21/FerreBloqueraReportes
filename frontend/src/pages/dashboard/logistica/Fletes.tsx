@@ -40,6 +40,7 @@ const Fletes: React.FC = () => {
     const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);    
     const [tasaCambio, setTasaCambio] = React.useState<number >(0);
     const [tasaSeleccionadaId, setTasaSeleccionadaId] = React.useState<number | string | null>(null);
+    const [arraySeleccionActualizada, setArraySeleccionActualizada] = React.useState<FleteSeleccionado[]>([]);
     const [formBusquedaFletes, setFormBusquedaFletes] = React.useState<{
       fechaDesde: string;
       fechaHasta: string;
@@ -113,6 +114,7 @@ const Fletes: React.FC = () => {
       setFletesSeleccionados(prev => {
         const yaSeleccionado = prev.some(f => f.keycodigo === keycodigo);
         const seleccionActualizada = yaSeleccionado
+        
           ? prev.filter(f => f.keycodigo !== keycodigo)
           : [...prev, { keycodigo, total: totalNum, vehiculo }];
 
@@ -127,21 +129,21 @@ const Fletes: React.FC = () => {
             : "PAGO DE FLETES EXTERNOS"
         );
 
-        const sumaTotal = seleccionActualizada.reduce((acc, flete) => acc + flete.total, 0);
-        if (selectedCuentaTipoMoneda===1){
-            setTotalPagar(sumaTotal*tasaCambio);
-        } else {
-            setTotalPagar(sumaTotal);
-        }
+        handleSumarTotales(seleccionActualizada);
 
         return seleccionActualizada;
       });
     };
     // Sumar totales de fletes seleccionados
-    /* const handleSumarTotales = () => {
-        const sumaTotal = fletesSeleccionados.reduce((acc, flete) => acc + flete.total, 0);
+     const handleSumarTotales = (seleccion?: FleteSeleccionado[]) => {
+      const fuente = seleccion ?? fletesSeleccionados;
+      const sumaTotal = fuente.reduce((acc, flete) => acc + flete.total, 0);
+      if (selectedCuentaTipoMoneda === 1) {
+        setTotalPagar(sumaTotal * tasaCambio);
+      } else {
         setTotalPagar(sumaTotal);
-    } */
+      }
+    } 
 
     // Enviar fletes seleccionados para Guardar en cont_registro y logistica_fletes_cancelados
     const handleEnviarSeleccionados = async () => {
@@ -161,6 +163,7 @@ const Fletes: React.FC = () => {
                 contConcepto: selectedConcepto,
                 descripcion: descripcion,
                 tasaCambio: tasaCambio,
+                totalPagar: totalPagar,
                 tipoMonedaNacional: selectedCuentaTipoMoneda,
             }, { withCredentials: true });
             alert("Fletes enviados correctamente");
@@ -180,6 +183,11 @@ const Fletes: React.FC = () => {
             //handlelistarVehiculos();
            
         }, [empresaActual?.id]);
+
+    // Actualizar totales cuando cambian moneda, tasa o selección    
+    React.useEffect(() => {
+      handleSumarTotales(fletesSeleccionados);
+    }, [selectedCuentaTipoMoneda, tasaCambio, fletesSeleccionados]);
 
     const handleBuscarFletesVehiculos = async () => {
         // Lógica para buscar vehículos        
@@ -420,7 +428,8 @@ const Fletes: React.FC = () => {
                         
                     // Usamos un pequeño timeout o validación para asegurar que el estado se limpie
                     const nuevaTasa = codtipomoneda === 1 ? 1 : 5;
-                    setTasaSeleccionadaId(nuevaTasa);              
+                    setTasaSeleccionadaId(nuevaTasa);  
+                    handleSumarTotales(fletesSeleccionados);            
                 }} 
             />
           </div>
@@ -431,13 +440,14 @@ const Fletes: React.FC = () => {
                   selectedId={tasaSeleccionadaId} // Pasamos la "señal"
                   onChange={(valor, origen) => {
                       setTasaCambio(Number(valor));
-                      setTasaSeleccionadaId(origen); // Mantener sincronizado si el usuario cambia manualmente
+                      setTasaSeleccionadaId(origen); // Mantener sincronizado si el usuario cambia manualmente                      
+                      /*handleSumarTotales(fletesSeleccionados);*/
                   }}
               />
           </div>
           <div className="flex-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pago</label>
-            <input type="number" step="0.01" className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg px-2 py-3 w-full" placeholder="Total a Pagar" value={totalPagar} onChange={e => setTotalPagar(Number(e.target.value))} /> 
+            <input type="number" step="0.01" className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg px-2 py-3 w-full" placeholder="Total a Pagar" value={Number(totalPagar).toFixed(2)} onChange={e => setTotalPagar(Number(e.target.value))} /> 
           </div>
           <div className="flex-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</label>
