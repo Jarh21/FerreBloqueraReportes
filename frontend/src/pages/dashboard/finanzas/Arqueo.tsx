@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from "../../../context/AuthContext"
 import axios from 'axios';
 import { buildApiUrl } from '../../../config/api';
+import HistorialDolar from '../../../components/finanzas/HistorialDolar';
 interface Params {
     [key: string]: string | undefined; // Add index signature
     date?: string; //date?: "2025-01-01";
@@ -386,9 +387,18 @@ const Arqueo: React.FC = () => {
     return (
         <div className="p-6 bg-gray-50 min-h-screen">
   {/* Encabezado Principal */}
-  <div className="mb-8">
-    <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Registro de Arqueo</h1>
-    <p className="text-slate-500 mt-1">Gestión y control de flujo de caja diario.</p>
+  <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+    <div>
+      <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+        <span className="w-2 h-8 bg-red-700 rounded-full"></span>
+        Registro de Arqueo
+      </h2>
+      <p className="text-slate-500 text-sm">Gestión y control de flujo de caja diario.</p>
+    </div>    
+    <div className="flex items-end gap-4">
+      <HistorialDolar />
+    </div>
+    
   </div>
   {error && (
     <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-700 text-red-800 rounded-r-lg flex items-center gap-3">
