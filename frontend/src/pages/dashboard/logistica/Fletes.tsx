@@ -35,6 +35,7 @@ const Fletes: React.FC = () => {
     const [selectedCuenta, setSelectedCuenta] = React.useState<number | null>(null);
     const [selectedCuentaTipoMoneda, setSelectedCuentaTipoMoneda] = React.useState<any | null>(null);
     const [descripcion, setDescripcion] = React.useState<string>("PAGO DE FLETES EXTERNOS");
+    const [totalPagar, setTotalPagar] = React.useState<number>(0);
     const [selectedConcepto, setSelectedConcepto] = React.useState<number | null>(58);
     const [fletesSeleccionados, setFletesSeleccionados] = React.useState<FleteSeleccionado[]>([]);    
     const [tasaCambio, setTasaCambio] = React.useState<number >(0);
@@ -126,9 +127,21 @@ const Fletes: React.FC = () => {
             : "PAGO DE FLETES EXTERNOS"
         );
 
+        const sumaTotal = seleccionActualizada.reduce((acc, flete) => acc + flete.total, 0);
+        if (selectedCuentaTipoMoneda===1){
+            setTotalPagar(sumaTotal*tasaCambio);
+        } else {
+            setTotalPagar(sumaTotal);
+        }
+
         return seleccionActualizada;
       });
     };
+    // Sumar totales de fletes seleccionados
+    /* const handleSumarTotales = () => {
+        const sumaTotal = fletesSeleccionados.reduce((acc, flete) => acc + flete.total, 0);
+        setTotalPagar(sumaTotal);
+    } */
 
     // Enviar fletes seleccionados para Guardar en cont_registro y logistica_fletes_cancelados
     const handleEnviarSeleccionados = async () => {
@@ -139,6 +152,7 @@ const Fletes: React.FC = () => {
         try {
             const keycodigos = fletesSeleccionados.map(f => f.keycodigo);
             const montoFletes = fletesSeleccionados.map(f => f.total);
+           
             await axios.post(buildApiUrl('/logistica/fletes/seleccionados'), {
                 empresaId: empresaActual.id,
                 keycodigos,
@@ -374,7 +388,7 @@ const Fletes: React.FC = () => {
                       type="checkbox"
                       className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                       checked={isSelected}
-                      onChange={() => handleCheckboxChange(flete.keycodigo, flete.total, flete.vehiculo)}
+                      onChange={() => { handleCheckboxChange(flete.keycodigo, flete.total, flete.vehiculo); }}
                     />
                   </td>
                 </tr>
@@ -422,9 +436,14 @@ const Fletes: React.FC = () => {
               />
           </div>
           <div className="flex-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pago</label>
+            <input type="number" step="0.01" className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg px-2 py-3 w-full" placeholder="Total a Pagar" value={totalPagar} onChange={e => setTotalPagar(Number(e.target.value))} /> 
+          </div>
+          <div className="flex-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</label>
             <input type="text" className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg px-2 py-3 w-full" placeholder="Descripcion" value={descripcion} onChange={e => setDescripcion(e.target.value)} /> 
           </div>
+          
           <button
             type="button"
             className="bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 shadow-md shadow-blue-100 transition-all disabled:opacity-30 disabled:grayscale active:scale-95"
