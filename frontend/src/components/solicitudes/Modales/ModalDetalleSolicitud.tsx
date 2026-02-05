@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { buildApiUrl } from '../../../config/api';
+// 1. CORRECCIÓN: Importamos SERVER_URL (la raíz http://ip:4500)
+import { SERVER_URL } from '../../../config/api';
 
-const API_BASE_URL = buildApiUrl
 
 interface ModalDetalleSolicitudProps {
     isOpen: boolean;
@@ -13,8 +13,10 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
     isOpen, onClose, solicitud 
 }) => {
     
-    // Zoom para ver comprobantes
     const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+    
+    // NUEVO ESTADO: Para controlar si el concepto se muestra completo o cortado
+    const [expandConcepto, setExpandConcepto] = useState(false);
 
     if (!isOpen || !solicitud) return null;
 
@@ -28,14 +30,20 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
         return `${Number(amount).toFixed(2)} ${currency === 'VES' ? 'Bs' : '$'}`;
     }
 
+    // 2. CORRECCIÓN LÓGICA DE URL
     const getImagenUrl = (url: string) => {
         if (!url) return null;
+        
+        // Si ya viene completa (ej: Cloudinary o S3), la dejamos igual
         if (url.startsWith('http')) return url;
-        return `${API_BASE_URL}${url}`;
+        
+        // Si es local, le pegamos la Raíz del Servidor (no la de la API)
+        // Aseguramos que la url empiece con /
+        const cleanPath = url.startsWith('/') ? url : `/${url}`;
+        return `${SERVER_URL}${cleanPath}`;
     };
 
     // --- LÓGICA CLAVE: Recuperar el array de pagos ---
-    // Si viene del backend nuevo, usa 'solicitud.pagos'. Si es viejo, usa los datos planos como fallback.
     const historialPagos = (solicitud.pagos && solicitud.pagos.length > 0) 
         ? solicitud.pagos 
         : (solicitud.total_pagado > 0 ? [{
@@ -44,7 +52,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
             banco_origen: solicitud.banco_origen,
             referencia: solicitud.referencia_pago,
             monto_pagado: solicitud.total_pagado,
-            comprobante_url: solicitud.comprobante_url
+            comprobante: solicitud.comprobante_url // Usamos 'comprobante' genérico
           }] : []);
 
     const deudaPendiente = Math.max(0, parseFloat(solicitud.monto) - parseFloat(solicitud.total_pagado || 0));
@@ -58,14 +66,14 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                     <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-50 rounded-t-xl">
                         <div>
                             <h3 className="text-xl font-black text-blue-800">Detalles de la Solicitud</h3>
-                            <p className="text-xs text-blue-600">ID: #{solicitud.id} • Fecha: {new Date(solicitud.creado_en).toLocaleDateString()}</p>
+                            <p className="text-xs text-blue-600">ID: #{solicitud.id} • Fecha: {new Date(solicitud.creado_en).toLocaleDateString()} • Solicitante: {solicitud.solicitante}</p>
                         </div>
                         <button onClick={onClose} className="text-slate-400 hover:text-red-700 font-bold p-2 transition-colors">✕</button>
                     </div>
 
                     <div className="p-6">
                         
-                        {/* SECCIÓN 1: DATOS GENERALES (Resumido en 2 columnas) */}
+                        {/* SECCIÓN 1: DATOS GENERALES */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             {/* Beneficiario */}
                             <div className="space-y-3">
@@ -104,15 +112,27 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                             {formatMonto(deudaPendiente, solicitud.moneda_pago)}
                                         </div>
                                     </div>
+                                    
+                                    {/* --- AQUÍ ESTÁ EL CAMBIO DEL CONCEPTO --- */}
                                     <div>
                                         <label className={labelClass}>Concepto</label>
-                                        <div className="text-xs text-slate-500 italic truncate" title={solicitud.concepto}>{solicitud.concepto}</div>
+                                        <div 
+                                            onClick={() => setExpandConcepto(!expandConcepto)}
+                                            className={`text-xs text-slate-500 italic cursor-pointer transition-all duration-200 border border-transparent hover:border-slate-200 hover:bg-slate-50 rounded p-1 ${
+                                                expandConcepto ? 'whitespace-normal break-words h-auto bg-slate-50' : 'truncate'
+                                            }`}
+                                            title="Clic para ver completo"
+                                        >
+                                            {solicitud.concepto}
+                                        </div>
                                     </div>
+                                    {/* ---------------------------------------- */}
+
                                 </div>
                             </div>
                         </div>
 
-                        {/* SECCIÓN 2: HISTORIAL DE PAGOS (LA SOLUCIÓN VISUAL) */}
+                        {/* SECCIÓN 2: HISTORIAL DE PAGOS */}
                         <div className="mt-4">
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-100">HISTORIAL DE TRANSACCIONES</span>
@@ -134,10 +154,10 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                         <tbody className="divide-y divide-slate-100">
                                             {historialPagos.map((pago: any, index: number) => {
                                                 const img = getImagenUrl(pago.comprobante_url || pago.comprobante);
+                                                
                                                 return (
                                                     <tr key={index} className="hover:bg-slate-50 transition-colors">
                                                         <td className="px-4 py-2 text-slate-500 font-mono text-xs">
-                                                            {/* Usamos creado_en de la tabla pagos_historial */}
                                                             {new Date(pago.creado_en).toLocaleDateString()}
                                                         </td>
                                                         <td className="px-4 py-2 text-slate-700 font-medium text-xs">
