@@ -23,7 +23,8 @@ interface FletesProps {
 interface FleteSeleccionado {
     keycodigo: number;
     total: number;
-  vehiculo: string;
+    vehiculo: string;
+    vehiculoId: number;
 }
 
 type VehiculoOption = { value: number; label: string };
@@ -109,14 +110,14 @@ const Fletes: React.FC = () => {
     // Estado para checkboxes seleccionados
   
     // Manejar selección de checkboxes
-    const handleCheckboxChange = (keycodigo: number, total: number, vehiculo: string) => {
+    const handleCheckboxChange = (keycodigo: number, total: number, vehiculo: string,vehiculoId: number) => {
       const totalNum = Number(total) || 0;
       setFletesSeleccionados(prev => {
         const yaSeleccionado = prev.some(f => f.keycodigo === keycodigo);
         const seleccionActualizada = yaSeleccionado
         
           ? prev.filter(f => f.keycodigo !== keycodigo)
-          : [...prev, { keycodigo, total: totalNum, vehiculo }];
+          : [...prev, { keycodigo, total: totalNum, vehiculo, vehiculoId }];
 
         const detalleFletes = seleccionActualizada
           .map((f) => `${f.vehiculo} SE CANCELO (${Number(f.total).toFixed(2)})`)
@@ -152,13 +153,17 @@ const Fletes: React.FC = () => {
             return;
         }
         try {
+          
             const keycodigos = fletesSeleccionados.map(f => f.keycodigo);
             const montoFletes = fletesSeleccionados.map(f => f.total);
-           
+            const vehiculos = fletesSeleccionados.map(f => f.vehiculo);
+            const vehiculoIds = fletesSeleccionados.map(f => f.vehiculoId);
             await axios.post(buildApiUrl('/logistica/fletes/seleccionados'), {
                 empresaId: empresaActual.id,
                 keycodigos,
                 montoFletes,
+                vehiculos,
+                vehiculoIds,
                 contCuenta: selectedCuenta,
                 contConcepto: selectedConcepto,
                 descripcion: descripcion,
@@ -190,7 +195,7 @@ const Fletes: React.FC = () => {
     }, [selectedCuentaTipoMoneda, tasaCambio, fletesSeleccionados]);
 
     const handleBuscarFletesVehiculos = async () => {
-        // Lógica para buscar vehículos        
+        // Lógica para buscar los fletes realizados por vehículos según los filtros        
         try {
             if (formBusquedaFletes.vehiculos.length === 0) {
                 setError("Selecciona al menos un vehículo para la búsqueda");
@@ -396,7 +401,7 @@ const Fletes: React.FC = () => {
                       type="checkbox"
                       className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                       checked={isSelected}
-                      onChange={() => { handleCheckboxChange(flete.keycodigo, flete.total, flete.vehiculo); }}
+                      onChange={() => { handleCheckboxChange(flete.keycodigo, flete.total, flete.vehiculo, flete.vehiculoId); }}
                     />
                   </td>
                 </tr>

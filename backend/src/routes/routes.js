@@ -1,5 +1,5 @@
 // Logística
-import { obtenerAutosFletes, obtenerAutos,obtenerAutosQueRealizaronFletes,guardarFletesSeleccionados,obtenerAutosSiace,guardarVehiculo,obtenerTotalFletesPorVehiculo, obtenerDetalleFacturasPorVehiculo } from "../modules/logistica/logistica.controller.js"
+import { obtenerFletesCancelados,obtenerAutosFletes, obtenerAutos,obtenerAutosQueRealizaronFletes,guardarFletesSeleccionados,obtenerAutosSiace,guardarVehiculo,obtenerTotalFletesPorVehiculo, obtenerDetalleFacturasPorVehiculo } from "../modules/logistica/logistica.controller.js"
 
 import express from "express"
 // NUEVOS IMPORTS PARA ARCHIVOS
@@ -129,6 +129,7 @@ router.post("/logistica/fletes/seleccionados", authMiddleware, guardarFletesSele
 router.post("/logistica/fletes/guardar-vehiculo", authMiddleware, guardarVehiculo)
 router.post("/logistica/fletes/total-por-vehiculo", authMiddleware, obtenerTotalFletesPorVehiculo);
 router.post("/logistica/fletes/detalle-por-vehiculo", authMiddleware, obtenerDetalleFacturasPorVehiculo);
+router.post("/logistica/fletes-cancelados", authMiddleware, obtenerFletesCancelados)
 
 // Solicitudes - Entidades
 router.get("/solicitudes/entidades",  ObtenerEntidades)

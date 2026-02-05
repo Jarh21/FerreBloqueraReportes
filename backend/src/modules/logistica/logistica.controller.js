@@ -154,7 +154,7 @@ export const obtenerAutosFletes = async (req, res) => {
 export const guardarFletesSeleccionados = async (req, res) => {
     
     try {
-        const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes,descripcion, tasaCambio,totalPagar, tipoMonedaNacional } = req.body; 
+        const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes,vehiculos,vehiculoIds,descripcion, tasaCambio,totalPagar, tipoMonedaNacional } = req.body; 
        console.log("tipoMonedaNacional:", tipoMonedaNacional);
        console.log("tasa de cambio",tasaCambio);
         if (!empresaId || keycodigos.length === 0 || !contCuenta || !contConcepto || !montoFletes) {
@@ -189,13 +189,13 @@ export const guardarFletesSeleccionados = async (req, res) => {
          fecha, codusua, usuario, equipo, registrado) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, NOW())`;
         const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, montoMoneda,0,montoEnMonedaLocal,9,'SISTEMA-REPORTES','SERVER'];
-        await ejecutarConsultaEnEmpresaPorId(empresaId, asientoSql, asientoValores);
+        //DESCOMENTAR PARA GUARDAR EN CONT_REGISTRO---> await ejecutarConsultaEnEmpresaPorId(empresaId, asientoSql, asientoValores);
 
         //guardar en la tabla logistica_fletes_cancelados
-        const valores = keycodigos.map((fleteId, index) => [empresaId, fleteId, new Date(), contCuenta, contConcepto, montoFletes[index],montoFletes[index]*tasaCambio, new Date(), new Date()]);
+        const valores = keycodigos.map((fleteId, index) => [empresaId, fleteId, new Date(), contCuenta, contConcepto, montoFletes[index],montoFletes[index]*tasaCambio, vehiculoIds[index], new Date(), new Date()]);
 
         //insertamos los fletes cancelados
-        const sql = `INSERT INTO logistica_fletes_cancelados (empresa_id,id_factura_tipo_logistica, fecha_cancelado,cont_cuenta_id, cont_concepto_id, monto,monto_moneda,created_at,updated_at) VALUES ?`;
+        const sql = `INSERT INTO logistica_fletes_cancelados (empresa_id,id_factura_tipo_logistica, fecha_cancelado,cont_cuenta_id, cont_concepto_id, monto,monto_moneda,vehiculo_id,created_at,updated_at) VALUES ?`;
         await pool.query(sql, [valores]);
         res.json({ mensaje: "Fletes guardados correctamente" });
     } catch (error) {
@@ -339,3 +339,33 @@ export const obtenerDetalleFacturasPorVehiculo = async (req, res) => {
     }
 }
 
+export const obtenerFletesCancelados = async (req, res) => {
+    try {
+        const { empresaId, fechaDesde, fechaHasta, vehiculos } = req.body;
+        if (!empresaId) {
+            return res.status(400).json({ error: "Faltan parámetros: empresaId" });
+        }
+        const vehiculoIds = (Array.isArray(vehiculos) ? vehiculos : (vehiculo != null ? [vehiculo] : []))
+            .map(v => Number(v))
+            .filter(v => Number.isInteger(v) && v > 0);
+
+        const whereClause = vehiculoIds.length
+            ? `AND f.vehiculo_id IN (${vehiculoIds.map(() => "?").join(",")})`
+            : "";
+
+        if (!empresaId || !fechaDesde || !fechaHasta) {
+            return res.status(400).json({ error: "Faltan parámetros: empresaId, fechaDesde o fechaHasta" });
+        }
+        const sql = `SELECT CONCAT_WS(' ',                     
+                        v.marca, 
+                        v.modelo, 
+                        v.placa
+                    ) AS vehiculo, f.fecha_cancelado,cont_cuenta_id,cont_concepto_id,monto,monto_moneda from logistica_fletes_cancelados f, logistica_vehiculos v where f.empresa_id =? and f.vehiculo_id = v.id and (f.fecha_cancelado BETWEEN ? AND ?) ${whereClause} ORDER BY f.fecha_cancelado DESC
+                `;
+        const [resultados] = await pool.query(sql, [empresaId, fechaDesde, fechaHasta , ...vehiculoIds]);
+        res.json(resultados);
+    }catch (error) {
+        console.error("Error al obtener total de fletes por vehículo:", error);
+        res.status(500).json({ error: "Error al obtener total de fletes por vehículo" });
+    }
+}
