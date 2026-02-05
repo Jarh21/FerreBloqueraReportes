@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-// 1. CORRECCIÓN: Importamos SERVER_URL (la raíz http://ip:4500)
-import { SERVER_URL } from '../../../config/api';
-
+import { SERVER_URL } from '../../../config/api'; 
 
 interface ModalDetalleSolicitudProps {
     isOpen: boolean;
@@ -13,9 +11,10 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
     isOpen, onClose, solicitud 
 }) => {
     
+    // Estado para el zoom de la imagen
     const [zoomUrl, setZoomUrl] = useState<string | null>(null);
     
-    // NUEVO ESTADO: Para controlar si el concepto se muestra completo o cortado
+    // Estado para expandir/contraer el concepto largo
     const [expandConcepto, setExpandConcepto] = useState(false);
 
     if (!isOpen || !solicitud) return null;
@@ -30,20 +29,15 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
         return `${Number(amount).toFixed(2)} ${currency === 'VES' ? 'Bs' : '$'}`;
     }
 
-    // 2. CORRECCIÓN LÓGICA DE URL
+    // Lógica para construir la URL de la imagen correctamente
     const getImagenUrl = (url: string) => {
         if (!url) return null;
-        
-        // Si ya viene completa (ej: Cloudinary o S3), la dejamos igual
         if (url.startsWith('http')) return url;
-        
-        // Si es local, le pegamos la Raíz del Servidor (no la de la API)
-        // Aseguramos que la url empiece con /
         const cleanPath = url.startsWith('/') ? url : `/${url}`;
         return `${SERVER_URL}${cleanPath}`;
     };
 
-    // --- LÓGICA CLAVE: Recuperar el array de pagos ---
+    // Recuperar historial de pagos
     const historialPagos = (solicitud.pagos && solicitud.pagos.length > 0) 
         ? solicitud.pagos 
         : (solicitud.total_pagado > 0 ? [{
@@ -52,7 +46,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
             banco_origen: solicitud.banco_origen,
             referencia: solicitud.referencia_pago,
             monto_pagado: solicitud.total_pagado,
-            comprobante: solicitud.comprobante_url // Usamos 'comprobante' genérico
+            comprobante: solicitud.comprobante_url
           }] : []);
 
     const deudaPendiente = Math.max(0, parseFloat(solicitud.monto) - parseFloat(solicitud.total_pagado || 0));
@@ -75,7 +69,8 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                         
                         {/* SECCIÓN 1: DATOS GENERALES */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            {/* Beneficiario */}
+                            
+                            {/* Columna Izquierda: Beneficiario */}
                             <div className="space-y-3">
                                 <div className={sectionTitleClass}>
                                     <span className={badgeClass}>BENEFICIARIO</span>
@@ -91,7 +86,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                 </div>
                             </div>
 
-                            {/* Resumen Financiero */}
+                            {/* Columna Derecha: Finanzas */}
                             <div className="space-y-3">
                                 <div className={sectionTitleClass}>
                                     <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200">ESTADO DE CUENTA</span>
@@ -113,20 +108,22 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                         </div>
                                     </div>
                                     
-                                    {/* --- AQUÍ ESTÁ EL CAMBIO DEL CONCEPTO --- */}
+                                    {/* --- AQUÍ ESTÁ LA LÓGICA DE TEXTO EXPANDIBLE --- */}
                                     <div>
                                         <label className={labelClass}>Concepto</label>
                                         <div 
                                             onClick={() => setExpandConcepto(!expandConcepto)}
                                             className={`text-xs text-slate-500 italic cursor-pointer transition-all duration-200 border border-transparent hover:border-slate-200 hover:bg-slate-50 rounded p-1 ${
-                                                expandConcepto ? 'whitespace-normal break-words h-auto bg-slate-50' : 'truncate'
+                                                expandConcepto 
+                                                    ? 'whitespace-normal break-words h-auto bg-slate-50 shadow-sm' // Estado Expandido
+                                                    : 'truncate' // Estado Colapsado (una línea con ...)
                                             }`}
                                             title="Clic para ver completo"
                                         >
                                             {solicitud.concepto}
                                         </div>
                                     </div>
-                                    {/* ---------------------------------------- */}
+                                    {/* ----------------------------------------------- */}
 
                                 </div>
                             </div>
@@ -154,7 +151,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                         <tbody className="divide-y divide-slate-100">
                                             {historialPagos.map((pago: any, index: number) => {
                                                 const img = getImagenUrl(pago.comprobante_url || pago.comprobante);
-                                                
+                                                console.log('Imagen URL:', img);
                                                 return (
                                                     <tr key={index} className="hover:bg-slate-50 transition-colors">
                                                         <td className="px-4 py-2 text-slate-500 font-mono text-xs">
@@ -194,7 +191,6 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                 </div>
                             )}
                         </div>
-
                     </div>
 
                     {/* Footer */}
@@ -206,7 +202,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                 </div>
             </div>
 
-            {/* --- VISOR DE ZOOM (LIGHTBOX) --- */}
+            {/* --- VISOR DE ZOOM --- */}
             {zoomUrl && (
                 <div 
                     className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
