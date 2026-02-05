@@ -122,12 +122,24 @@ export const CrearSolicitud = async (req, res) => {
         ]);
 
         // 5. NOTIFICACIÓN PUSH
-        if (req.io) {
+       if (req.io) {
+            
+            // A. TRUCO: Buscamos el nombre de la empresa rapidito
+            const [infoEmpresa] = await connection.query(
+                "SELECT nombre FROM empresas WHERE id = ?", 
+                [empresa_id || 1] // Usamos el mismo ID que usaste para guardar
+            );
+            
+            const nombreEmpresa = infoEmpresa.length > 0 ? infoEmpresa[0].nombre : 'Sistema';
+
+            // B. Emitimos con el nombre incluido
             req.io.emit('nueva_solicitud', {
                 id: resultSolicitud.insertId,
-                mensaje: `Nueva solicitud creada por ${solicitante}`,
+                mensaje: `Empresa: ${nombreEmpresa} Creada por: ${solicitante}`, // <--- AQUI ESTÁ EL CAMBIO
+                       // <--- Extra data útil
                 monto: monto,
-                moneda: moneda
+                moneda: moneda,
+                empresa_id: empresa_id // También mandamos el ID por si acaso el front quiere filtrar
             });
         }
 
