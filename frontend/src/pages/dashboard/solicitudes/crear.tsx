@@ -239,8 +239,9 @@ const GestionPagos: React.FC = () => {
                         )}
                         <tr className="hover:bg-slate-50 transition-colors group">
                         <td className="px-4 py-3 text-slate-500 font-medium whitespace-nowrap">
+                          <div className="text-[10px] text-green-700 font-mono">Solicita: <br />{sol.solicitante}</div>
                             <div className="font-bold text-slate-700">{formatoFecha(sol.creado_en)}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">#{sol.id}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">#{sol.id}</div>
                         </td>
                         <td className="px-4 py-3">
                             <div className="font-bold text-slate-700">{sol.beneficiario_nombre}</div>
