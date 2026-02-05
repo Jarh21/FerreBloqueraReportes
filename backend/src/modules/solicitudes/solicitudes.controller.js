@@ -12,7 +12,7 @@ export const CrearSolicitud = async (req, res) => {
 
         const {
             modo_beneficiario,      
-            guardar_en_directorio,  // <--- Este es el booleano clave
+            guardar_en_directorio,  
             
             beneficiario_nombre,
             beneficiario_rif,
@@ -46,14 +46,12 @@ export const CrearSolicitud = async (req, res) => {
         // 2. GESTIÓN DE BENEFICIARIO
         let beneficiarioId = null;
 
-        // A. Buscar si ya existe (Siempre intentamos buscarlo por si acaso)
+        // A. Buscar si ya existe
         if (rifLimpio) {
             const [existingUser] = await connection.query("SELECT id FROM beneficiarios WHERE rif = ?", [rifLimpio]);
             if (existingUser.length > 0) beneficiarioId = existingUser[0].id;
         }
 
-        // --- CORRECCIÓN AQUÍ ---
-        // Definimos si realmente tenemos permiso para guardar en la BD maestra
         const debeGuardar = modo_beneficiario === 'solo_registro' || (modo_beneficiario === 'nuevo' && guardar_en_directorio);
 
         // B. Crear SOLO si no existe Y tenemos permiso de guardar
@@ -65,14 +63,20 @@ export const CrearSolicitud = async (req, res) => {
             beneficiarioId = result.insertId;
         }
 
-        // C. Gestión de la Cuenta Bancaria
-        // Solo entramos aquí si tenemos un beneficiarioId válido (ya existía o se acaba de crear porque debíamos guardar)
+        // -----------------------------------------------------------------------
+        // C. GESTIÓN DE LA CUENTA BANCARIA (AQUÍ ESTÁ LA MODIFICACIÓN)
+        // -----------------------------------------------------------------------
         if (beneficiarioId && debeGuardar && tipo_pago !== 'EFECTIVO USD') {
+            
+            // CAMBIO: Ahora verificamos también el 'banco'.
+            // Antes: Solo miraba si el teléfono existía.
+            // Ahora: Mira si el teléfono existe EN ESE BANCO ESPECÍFICO.
             const [cuentas] = await connection.query(
-                "SELECT id FROM beneficiarios_cuentas WHERE beneficiario_id = ? AND tipo_pago = ? AND identificador = ?",
-                [beneficiarioId, tipo_pago, identificador]
+                "SELECT id FROM beneficiarios_cuentas WHERE beneficiario_id = ? AND tipo_pago = ? AND identificador = ? AND banco = ?",
+                [beneficiarioId, tipo_pago, identificador, beneficiario_banco || null]
             );
 
+            // Si no existe esa combinación exacta (ID + Tipo + Identificador + Banco), la insertamos.
             if (cuentas.length === 0) {
                 await connection.query(
                     "INSERT INTO beneficiarios_cuentas (beneficiario_id, tipo_pago, banco, identificador) VALUES (?, ?, ?, ?)",
@@ -80,6 +84,7 @@ export const CrearSolicitud = async (req, res) => {
                 );
             }
         }
+        // -----------------------------------------------------------------------
 
         // 3. SI ERA SOLO REGISTRO, TERMINAMOS AQUÍ
         if (modo_beneficiario === 'solo_registro') {
@@ -87,7 +92,7 @@ export const CrearSolicitud = async (req, res) => {
             return res.status(200).json({ success: true, message: "Beneficiario agregado al directorio correctamente." });
         }
 
-        // 4. CREAR LA SOLICITUD (Esto siempre ocurre, se guarde o no el beneficiario)
+        // 4. CREAR LA SOLICITUD
         const querySolicitud = `
             INSERT INTO detalles_solicitudes 
             (
@@ -103,7 +108,7 @@ export const CrearSolicitud = async (req, res) => {
             empresa_id || 1,
             concepto,
             nombreLimpio,
-            rifLimpio, // Aquí se guarda el RIF o el RIF Virtual para el historial, independientemente de si se guardó en el directorio
+            rifLimpio, 
             beneficiario_banco || (tipo_pago === 'ZELLE' ? 'ZELLE' : null),
             identificador,
             tipo_pago,
@@ -117,12 +122,24 @@ export const CrearSolicitud = async (req, res) => {
         ]);
 
         // 5. NOTIFICACIÓN PUSH
-        if (req.io) {
+       if (req.io) {
+            
+            // A. TRUCO: Buscamos el nombre de la empresa rapidito
+            const [infoEmpresa] = await connection.query(
+                "SELECT nombre FROM empresas WHERE id = ?", 
+                [empresa_id || 1] // Usamos el mismo ID que usaste para guardar
+            );
+            
+            const nombreEmpresa = infoEmpresa.length > 0 ? infoEmpresa[0].nombre : 'Sistema';
+
+            // B. Emitimos con el nombre incluido
             req.io.emit('nueva_solicitud', {
                 id: resultSolicitud.insertId,
-                mensaje: `Nueva solicitud creada por ${solicitante}`,
+                mensaje: `Empresa: ${nombreEmpresa} Creada por: ${solicitante}`, // <--- AQUI ESTÁ EL CAMBIO
+                       // <--- Extra data útil
                 monto: monto,
-                moneda: moneda
+                moneda: moneda,
+                empresa_id: empresa_id // También mandamos el ID por si acaso el front quiere filtrar
             });
         }
 
@@ -136,12 +153,11 @@ export const CrearSolicitud = async (req, res) => {
     } catch (error) {
         await connection.rollback();
         console.error("Error en CrearSolicitud:", error);
-        res.status(500).json({ success: false, message: "Error de Beneficiario: Usuario ya existe", error: error.message });
+        res.status(500).json({ success: false, message: "Error al procesar la solicitud", error: error.message });
     } finally {
         connection.release();
     }
 };
-
 // ----------------------------------------------------
 // OBTENER LISTADO (GET)
 // ----------------------------------------------------

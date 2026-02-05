@@ -4,6 +4,7 @@ import { buildApiUrl } from '../../../config/api';
 import axios from 'axios';
 import InputBancosAutocomplete from '../../../components/solicitudes/SelectSolicitudes/InputBancosAutocomplete';
 import InputBeneficiarioAutocomplete from '../../../components/solicitudes/SelectSolicitudes/InputBeneficiarioAutocomplete';
+import SelectCuenta from '../../../components/selectoresContables/SelectCuenta';
 
 // MODAL DE LECTURA
 import ModalDetalleSolicitud from '../../../components/solicitudes/Modales/ModalDetalleSolicitud';
