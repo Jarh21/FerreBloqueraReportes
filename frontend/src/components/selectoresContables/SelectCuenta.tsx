@@ -36,6 +36,8 @@ const SelectCuenta: React.FC<SelectCuentaProps> = ({
         }))
     ];
     
+
+    
     const obtenerContableCuenta = async () => {
         try {
             const resultado = await axios.get(`${buildApiUrl('/finanzas/contable-cuenta/')}${empresaActual?.id}`, { withCredentials: true });

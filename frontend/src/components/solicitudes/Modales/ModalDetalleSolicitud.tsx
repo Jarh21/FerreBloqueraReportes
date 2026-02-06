@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { SERVER_URL } from '../../../config/api'; 
+import { useAuth } from '../../../context/AuthContext';
+
+
 
 interface ModalDetalleSolicitudProps {
     isOpen: boolean;
     onClose: () => void;
+    onEditar?: (solicitud: any) => void; // <--- NUEVA PROP PARA EDITAR
     solicitud: any;
 }
 
 const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({ 
-    isOpen, onClose, solicitud 
+    isOpen, onClose, onEditar, solicitud 
 }) => {
-    
+    //usuario para comparar la edicion
+    const {usuario} = useAuth();
     // Estado para el zoom de la imagen
     const [zoomUrl, setZoomUrl] = useState<string | null>(null);
     
@@ -108,22 +113,21 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                         </div>
                                     </div>
                                     
-                                    {/* --- AQUÍ ESTÁ LA LÓGICA DE TEXTO EXPANDIBLE --- */}
+                                    {/* Concepto Expandible */}
                                     <div>
                                         <label className={labelClass}>Concepto</label>
                                         <div 
                                             onClick={() => setExpandConcepto(!expandConcepto)}
                                             className={`text-xs text-slate-500 italic cursor-pointer transition-all duration-200 border border-transparent hover:border-slate-200 hover:bg-slate-50 rounded p-1 ${
                                                 expandConcepto 
-                                                    ? 'whitespace-normal break-words h-auto bg-slate-50 shadow-sm' // Estado Expandido
-                                                    : 'truncate' // Estado Colapsado (una línea con ...)
+                                                    ? 'whitespace-normal break-words h-auto bg-slate-50 shadow-sm' 
+                                                    : 'truncate'
                                             }`}
                                             title="Clic para ver completo"
                                         >
                                             {solicitud.concepto}
                                         </div>
                                     </div>
-                                    {/* ----------------------------------------------- */}
 
                                 </div>
                             </div>
@@ -151,7 +155,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                         <tbody className="divide-y divide-slate-100">
                                             {historialPagos.map((pago: any, index: number) => {
                                                 const img = getImagenUrl(pago.comprobante_url || pago.comprobante);
-                                                console.log('Imagen URL:', img);
+                                                
                                                 return (
                                                     <tr key={index} className="hover:bg-slate-50 transition-colors">
                                                         <td className="px-4 py-2 text-slate-500 font-mono text-xs">
@@ -193,8 +197,24 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                         </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="p-4 border-t border-slate-100 flex justify-end">
+                    {/* Footer con Botones */}
+                    <div className="p-4 border-t border-slate-100 flex justify-between items-center bg-gray-50 rounded-b-xl">
+                        
+                        {/* Botón EDITAR (Solo si está pendiente - estado 0) */}
+                        <div>
+                            {solicitud.estado_pago === 0 && onEditar && (
+                                usuario?.nombre === solicitud.solicitante  && (
+
+                                <button 
+                                    onClick={() => onEditar(solicitud)}
+                                    className="px-4 py-2 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 rounded-lg font-bold text-sm transition-colors flex items-center gap-2"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    Editar Solicitud
+                                </button>)
+                            )}
+                        </div>
+
                         <button onClick={onClose} className="px-6 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm hover:bg-slate-900 transition-colors">
                             Cerrar
                         </button>

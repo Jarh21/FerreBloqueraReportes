@@ -21,6 +21,8 @@ const ConsultaPagos: React.FC = () => {
   const [isDetalleOpen, setIsDetalleOpen] = useState(false);
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<any>(null);
 
+
+  
   // --- ESTADO DE LOS FILTROS ---
   const [filtros, setFiltros] = useState({
       fechaInicio: '',
@@ -30,6 +32,8 @@ const ConsultaPagos: React.FC = () => {
       estatus: '',    
       bancoOrigen: ''
   });
+
+  
   
   // Carga inicial (sin filtros)
   useEffect(() => {
@@ -84,7 +88,15 @@ const ConsultaPagos: React.FC = () => {
           [e.target.name]: e.target.value
       });
   };
-
+// Adaptador para el SelectCuenta
+const handleCuentaChange = (valor: number | string | null) => {
+    setFiltros(prev => ({
+        ...prev,
+        // Si el valor es null (limpiaron el select), guardamos string vacío
+        // Si viene un valor, lo guardamos.
+        bancoOrigen: valor ? String(valor) : '' 
+    }));
+};
   // --- BUSCADOR HÍBRIDO (SERVIDOR + LOCAL) ---
   const handleBuscar = async () => {
       // 1. FILTRO DE SERVIDOR (Fechas)
@@ -272,8 +284,17 @@ const ConsultaPagos: React.FC = () => {
              
              {/* Fila 3 */}
              <div className="md:col-span-2">
-                <label className={labelFilterClass}>Banco de Origen (Nombre)</label>
-                <InputBancosAutocomplete name="bancoOrigen" value={filtros.bancoOrigen} onChange={handleInputChange} className={inputFilterClass} />
+           
+               <div className="md:col-span-2">
+    <label className={labelFilterClass}>Banco de Origen (Cuenta)</label>
+    <SelectCuenta 
+    value={filtros.bancoOrigen ? Number(filtros.bancoOrigen) : null} 
+    onChange={(val) => handleCuentaChange(val)} 
+    // Usamos text-xs y quitamos paddings externos que puedan estorbar
+    className="text-xs w-full" 
+/>
+    
+</div>
             </div>
         </div>
 

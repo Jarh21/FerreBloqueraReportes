@@ -20,7 +20,7 @@ import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, edit
 // Solicitudes - Entidades
 import { ObtenerEntidades} from "../modules/solicitudes/entidades.controller.js"
 // Solicitudes - Controller (Agregado ProcesarPago aquí)
-import { CrearSolicitud, ObtenerSolicitudes, BuscarBeneficiarios, ProcesarPago, AnularSolicitud } from "../modules/solicitudes/solicitudes.controller.js";
+import { CrearSolicitud, ObtenerSolicitudes, BuscarBeneficiarios, ProcesarPago, AnularSolicitud, EditarSolicitud } from "../modules/solicitudes/solicitudes.controller.js";
 //chatbot
 import { obtenerRespuestaChatbot } from "../modules/chatbot/chatbot.controller.js";
 // --- CONFIGURACIÓN DE MULTER (CARGA DE IMÁGENES) ---
@@ -108,6 +108,7 @@ router.post("/solicitudes/crear",CrearSolicitud);
 router.get("/solicitudes/listar/:empresaId", ObtenerSolicitudes);
 router.get("/solicitudes/buscar-beneficiario", BuscarBeneficiarios);
 router.post('/solicitudes/anular/:id', AnularSolicitud);
+router.put('/solicitudes/editar/:id', EditarSolicitud);
 
 // NUEVA RUTA: Procesar Pago (Con middleware Multer)
 router.post("/solicitudes/procesar", authMiddleware, upload.single('comprobante'), ProcesarPago);

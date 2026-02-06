@@ -402,3 +402,43 @@ export const AnularSolicitud = async (req, res) => {
         connection.release();
     }
 };
+
+// solicitudes.controller.js
+
+export const EditarSolicitud = async (req, res) => {
+    const { id } = req.params;
+    const { 
+        beneficiario_nombre, beneficiario_rif, beneficiario_banco, 
+        identificador, concepto, monto, moneda_pago, tasa_cambio 
+    } = req.body;
+
+    const connection = await pool.getConnection();
+
+    try {
+        // Validar que no esté pagada (Estado 1)
+        const [check] = await connection.query("SELECT estado_pago FROM detalles_solicitudes WHERE id = ?", [id]);
+        if (check.length === 0) return res.status(404).json({ message: "Solicitud no encontrada" });
+        if (check[0].estado_pago === 1) return res.status(400).json({ message: "No se puede editar una solicitud PAGADA" });
+
+        await connection.query(`
+            UPDATE detalles_solicitudes SET 
+                beneficiario_nombre = ?,
+                beneficiario_rif = ?,
+                beneficiario_banco = ?,
+                beneficiario_identificador = ?,
+                concepto = ?,
+                monto = ?,
+                moneda_pago = ?,
+                tasa_cambio = ?
+            WHERE id = ?
+        `, [beneficiario_nombre, beneficiario_rif, beneficiario_banco, identificador, concepto, monto, moneda_pago, tasa_cambio, id]);
+
+        res.json({ success: true, message: "Solicitud actualizada correctamente" });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error al actualizar" });
+    } finally {
+        connection.release();
+    }
+};

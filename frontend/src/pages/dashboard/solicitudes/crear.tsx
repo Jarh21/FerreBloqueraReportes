@@ -9,9 +9,10 @@ import io from 'socket.io-client';
 import ModalSolicitudPago from '../../../components/solicitudes/Modales/ModalSolicitudPago';
 import ModalProcesarPago from '../../../components/solicitudes/Modales/ModalProcesarPago';
 import ModalDetalleSolicitud from '../../../components/solicitudes/Modales/ModalDetalleSolicitud';
+import ModalEditarSolicitud from '../../../components/solicitudes/Modales/ModalEditarSolicitud'; // <--- IMPORTACIÓN NUEVA
 
 const GestionPagos: React.FC = () => {
-  const { empresaActual, validarModulo } = useAuth();
+  const { empresaActual, validarModulo, usuario } = useAuth();
   
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,43 +22,44 @@ const GestionPagos: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isProcesarModalOpen, setIsProcesarModalOpen] = useState(false);
   const [isDetalleOpen, setIsDetalleOpen] = useState(false);
+  const [isModalEditarOpen, setIsModalEditarOpen] = useState(false); // <--- ESTADO NUEVO
+  
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<any>(null);
   
   // 1. CARGA INICIAL
   useEffect(() => {
     if (empresaActual?.id) {
-        obtenerSolicitudes(false); // False = Muestra loading spinner
+        obtenerSolicitudes(false); 
     }
   }, [empresaActual?.id]);
 
-  // 2. SOCKET.IO (REFRESCO SILENCIOSO)
+  // 2. SOCKET.IO
   useEffect(() => {
       const socket = io(SERVER_URL, { withCredentials: true, autoConnect: true });
 
-      // Evento: Nueva Solicitud
       socket.on('nueva_solicitud', () => {
-          obtenerSolicitudes(true); // True = Silencioso (sin spinner)
+          obtenerSolicitudes(true);
           toast.info("Nueva solicitud recibida", { position: 'bottom-right' });
       });
 
-      // Evento: Solicitud Anulada (Por si otro admin anula algo mientras ves)
       socket.on('solicitud_anulada', (data: any) => {
           obtenerSolicitudes(true);
+          // Si anularon la que estábamos viendo, cerramos todo
           if (solicitudSeleccionada?.id == data.id) {
-              setIsProcesarModalOpen(false); // Cierra modales si estabas viendo esa solicitud
+              setIsProcesarModalOpen(false);
+              setIsDetalleOpen(false);
+              setIsModalEditarOpen(false);
           }
       });
 
       return () => { socket.disconnect(); };
   }, [empresaActual?.id, solicitudSeleccionada]);
 
-  // 3. FUNCIÓN DE CARGA (MEJORADA)
-  // Agregamos el parametro 'isBackground' para controlar el spinner
+  // 3. FUNCIÓN DE CARGA
   const obtenerSolicitudes = async (isBackground = false) => {
     if (!empresaActual?.id) return;
 
     try {
-      // Solo mostramos el spinner si NO es una carga en segundo plano
       if (!isBackground) setLoading(true);
       setError(null);
 
@@ -69,10 +71,8 @@ const GestionPagos: React.FC = () => {
       
       let data = Array.isArray(response.data) ? response.data : (response.data?.rows ?? []);
       
-      // Filtros: Pendientes (0) y Abonados (3)
       data = data.filter((s: any) => s.estado_pago === 0 || s.estado_pago === 3);
 
-      // Ordenamiento: Agrupado por estado, luego por fecha
       data.sort((a: any, b: any) => {
           if (a.estado_pago === b.estado_pago) {
               return new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime();
@@ -91,14 +91,12 @@ const GestionPagos: React.FC = () => {
   };
 
   const handleCrearSolicitud = async () => {
-    // Al guardar, forzamos refresco manual por seguridad
     await obtenerSolicitudes(true); 
     setIsModalOpen(false);
   };
 
   const handleProcesarPago = async (idSolicitud: number, datosPago: any) => {
       try {
-          // Aquí sí mostramos loading porque es una acción del usuario
           setLoading(true); 
           const formData = new FormData();
           formData.append('id_solicitud', idSolicitud.toString());
@@ -131,7 +129,22 @@ const GestionPagos: React.FC = () => {
       }
   };
 
-  // Anular Solicitud (Con Toast Promise)
+  // --- LÓGICA DE EDICIÓN ---
+  const handleAbrirEdicion = (solicitud: any) => {
+      // 1. Nos aseguramos de tener la data
+      setSolicitudSeleccionada(solicitud);
+      // 2. Cerramos detalle
+      setIsDetalleOpen(false);
+      // 3. Abrimos editor
+      setIsModalEditarOpen(true);
+  };
+
+  const handleEdicionCompletada = async () => {
+      await obtenerSolicitudes(true);
+      // Al terminar de editar, la modal se cierra sola por el onClose, aquí solo refrescamos
+  };
+  // -------------------------
+
   const handleAnularSolicitud = async (id: number) => {
       const confirmacion = window.confirm("¿Estás seguro de ANULAR esta solicitud? Desaparecerá de esta lista.");
       if (!confirmacion) return;
@@ -196,7 +209,7 @@ const GestionPagos: React.FC = () => {
         )}
       </div>
 
-      {/* Loading (Solo aparece en carga inicial manual) */}
+      {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-10 gap-3 text-slate-500">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-700"></div>
@@ -239,7 +252,7 @@ const GestionPagos: React.FC = () => {
                         )}
                         <tr className="hover:bg-slate-50 transition-colors group">
                         <td className="px-4 py-3 text-slate-500 font-medium whitespace-nowrap">
-                          <div className="text-[10px] text-green-700 font-mono">Solicita: <br />{sol.solicitante}</div>
+                            <div className="text-[10px] text-green-700 font-mono">Solicita: <br />{sol.solicitante}</div>
                             <div className="font-bold text-slate-700">{formatoFecha(sol.creado_en)}</div>
                             <div className="text-[11px] text-slate-400 font-mono">#{sol.id}</div>
                         </td>
@@ -290,13 +303,14 @@ const GestionPagos: React.FC = () => {
                                 </button>
 
                                 {sol.estado_pago === 0 && (
+                                  usuario?.nombre === sol.solicitante && (
                                     <button 
                                         onClick={() => handleAnularSolicitud(sol.id)}
                                         className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 border border-red-100 transition-colors"
                                         title="Anular Solicitud"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    </button>
+                                    </button>)
                                 )}
                             </div>
                         </td>
@@ -320,7 +334,8 @@ const GestionPagos: React.FC = () => {
         )
       )}
 
-      {/* MODAL CREAR */}
+      {/* --- AQUÍ ESTÁN LAS MODALES --- */}
+
       <ModalSolicitudPago 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
@@ -328,7 +343,6 @@ const GestionPagos: React.FC = () => {
         empresaId={empresaActual?.id}
       />
 
-      {/* MODAL PROCESAR (PAGAR/ABONAR) */}
       <ModalProcesarPago 
         isOpen={isProcesarModalOpen}
         onClose={() => setIsProcesarModalOpen(false)}
@@ -336,10 +350,17 @@ const GestionPagos: React.FC = () => {
         solicitud={solicitudSeleccionada}
       />
 
-      {/* MODAL DETALLES (SOLO LECTURA) */}
       <ModalDetalleSolicitud
         isOpen={isDetalleOpen}
         onClose={() => setIsDetalleOpen(false)}
+        solicitud={solicitudSeleccionada}
+        onEditar={handleAbrirEdicion} // <--- CONECTAMOS EL BOTÓN DE EDICIÓN
+      />
+
+      <ModalEditarSolicitud
+        isOpen={isModalEditarOpen}
+        onClose={() => setIsModalEditarOpen(false)}
+        onUpdate={handleEdicionCompletada}
         solicitud={solicitudSeleccionada}
       />
 

@@ -22,7 +22,7 @@ interface ModalSolicitudPagoProps {
     onClose: () => void;
     onSave: (formData: any, estadoPago?: number, soloRegistro?: boolean) => void;
     empresaId?: number | string;
-    tasaBCV?: number;  // Tasa de respaldo (hardcoded)
+    tasaBCV?: number;
     tasaEuro?: number;
 }
 
@@ -42,7 +42,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
   const [origenTasa, setOrigenTasa] = useState<'BCV' | 'EURO' | 'MANUAL'>('BCV');
   const [accionBoton, setAccionBoton] = useState<'guardar' | 'pagar'>('guardar');
 
-  // ESTADOS PARA LA TASA API
   const [tasaBCVEnLinea, setTasaBCVEnLinea] = useState<number | null>(null);
   const [cargandoTasa, setCargandoTasa] = useState(false);
 
@@ -69,25 +68,20 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     comprobante: null as File | null
   });
 
-  // 1. CONSUMO DE API (DolarApi Venezuela)
+  // API Tasa
   useEffect(() => {
     if (isOpen) {
         const fetchTasa = async () => {
             setCargandoTasa(true);
             try {
-                // Consultamos la API pública
                 const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
                 if (!response.ok) throw new Error('Error al obtener tasa');
-                
                 const data = await response.json();
-                
-                // La API retorna objeto { promedio: 123.45, ... }
                 if (data && data.promedio) {
                     setTasaBCVEnLinea(parseFloat(data.promedio));
                 }
             } catch (error) {
-                console.warn("No se pudo obtener la tasa en línea, usando defecto.", error);
-                // Si falla, no hacemos nada, se usará la prop tasaBCV por defecto
+                console.warn("No se pudo obtener la tasa en línea", error);
             } finally {
                 setCargandoTasa(false);
             }
@@ -96,25 +90,18 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     }
   }, [isOpen]);
 
-  // Limpiar formulario al cambiar de pestaña
   useEffect(() => {
     handleLimpiarCampos();
   }, [modoBeneficiario]);
 
-  // Sincronizar RIF visual
   useEffect(() => {
     const rifCompleto = rifNumero ? `${rifPrefijo}-${rifNumero}` : '';
     setFormData(prev => ({ ...prev, beneficiario_rif: rifCompleto }));
   }, [rifPrefijo, rifNumero]);
 
-  // 2. EFECTO TASA MEJORADO (Prioriza la tasa en línea)
   useEffect(() => {
     let nuevaTasa = formData.tasa;
-    
-    if (origenTasa === 'BCV') {
-        // AQUÍ ESTÁ LA MAGIA: Si tenemos tasa de la API, úsala. Si no, usa la prop.
-        nuevaTasa = tasaBCVEnLinea || tasaBCV;
-    }
+    if (origenTasa === 'BCV') nuevaTasa = tasaBCVEnLinea || tasaBCV;
     else if (origenTasa === 'EURO') nuevaTasa = tasaEuro;
 
     if (origenTasa !== 'MANUAL' && moneda === 'VES') {
@@ -127,18 +114,20 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     } else {
         setFormData(prev => ({ ...prev, tasa: nuevaTasa }));
     }
-  }, [origenTasa, tasaBCV, tasaEuro, moneda, tasaBCVEnLinea]); // Agregamos tasaBCVEnLinea a dependencias
+  }, [origenTasa, tasaBCV, tasaEuro, moneda, tasaBCVEnLinea]);
 
-  // --- FILTROS DE INPUTS (SOLO NÚMEROS) ---
   const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>) => {
       const { name, value } = e.target;
       const valorLimpio = value.replace(/[^0-9]/g, '');
       setFormData(prev => ({ ...prev, [name]: valorLimpio }));
   };
 
+  // --- CAMBIO PRINCIPAL: FORZAR MAYÚSCULAS ---
   const handleChange = (e: { target: { name: string; value: any } }) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // Aplicamos toUpperCase() para guardar en mayúsculas
+    const valorFinal = typeof value === 'string' ? value.toUpperCase() : value;
+    setFormData(prev => ({ ...prev, [name]: valorFinal }));
   };
 
   const handleLimpiarCampos = () => {
@@ -312,7 +301,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 'Authorization': `Bearer ${localStorage.getItem('token')}` 
             },
             body: JSON.stringify(payload)
-            
         });
 
         const data = await response.json();
@@ -324,7 +312,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
             
             if (onSave) onSave(formData, payload.estado_pago, modoBeneficiario === 'solo_registro');
             onClose();
-            
         } else {
             toast.error("Error al guardar", { description: data.message || 'No se pudo procesar la solicitud' });
         }
@@ -341,7 +328,8 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
 
   if (!isOpen) return null;
 
-  const inputClass = "w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all";
+  // --- AQUI SE AGREGO LA CLASE 'uppercase' PARA EL VISUAL ---
+  const inputClass = "w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all uppercase";
   const labelClass = "text-[10px] font-bold text-slate-400 uppercase ml-1";
 
   // Helper Inputs
@@ -381,7 +369,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
 
   const renderCamposManuales = () => {
      const nombreInputClass = camposIdentidadBloqueados 
-        ? "w-full p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed outline-none"
+        ? "w-full p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed outline-none uppercase"
         : inputClass;
 
      switch (formData.tipo_pago) {
@@ -678,8 +666,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                         >
                             <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg> Limpiar campos
-                           
+                            </svg>
                         </button>
                     )}
                 </div>
@@ -706,7 +693,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                             disabled={loading}
                             className={`bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700 shadow-lg shadow-green-100 active:scale-95 flex items-center gap-2 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                            {!loading && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z" /></svg>}
+                            {!loading && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z" /></svg>}
                             {loading ? 'Pagando...' : 'Pagar Ahora'}
                         </button>
                     )}
