@@ -188,7 +188,7 @@ export const guardarFletesSeleccionados = async (req, res) => {
          debito, credito, monto_moneda_cuenta_debito, monto_moneda_cuenta_credito, 
          fecha, codusua, usuario, equipo, registrado) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, NOW())`;
-        const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, montoMoneda,0,montoEnMonedaLocal,9,'SISTEMA-REPORTES','SERVER'];
+        const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, montoMoneda,0,montoEnMonedaLocal,9,'SISTEMA-FLETES','SERVER'];
         //DESCOMENTAR PARA GUARDAR EN CONT_REGISTRO---> await ejecutarConsultaEnEmpresaPorId(empresaId, asientoSql, asientoValores);
 
         //guardar en la tabla logistica_fletes_cancelados
@@ -345,6 +345,12 @@ export const obtenerFletesCancelados = async (req, res) => {
         if (!empresaId) {
             return res.status(400).json({ error: "Faltan parámetros: empresaId" });
         }
+        const [cuentas, conceptos] = await Promise.all([
+            listarContCuentas(empresaId),
+            listarContConceptos(empresaId)
+        ]);
+        const cuentasMap = new Map(cuentas.map(item => [Number(item.keycodigo), item.nombre]));
+        const conceptosMap = new Map(conceptos.map(item => [Number(item.keycodigo), item.nombre]));
         const vehiculoIds = (Array.isArray(vehiculos) ? vehiculos : (vehiculo != null ? [vehiculo] : []))
             .map(v => Number(v))
             .filter(v => Number.isInteger(v) && v > 0);
@@ -363,9 +369,22 @@ export const obtenerFletesCancelados = async (req, res) => {
                     ) AS vehiculo, f.fecha_cancelado,cont_cuenta_id,cont_concepto_id,monto,monto_moneda from logistica_fletes_cancelados f, logistica_vehiculos v where f.empresa_id =? and f.vehiculo_id = v.id and (f.fecha_cancelado BETWEEN ? AND ?) ${whereClause} ORDER BY f.fecha_cancelado DESC
                 `;
         const [resultados] = await pool.query(sql, [empresaId, fechaDesde, fechaHasta , ...vehiculoIds]);
-        res.json(resultados);
+        const resultadosConNombres = resultados.map(row => ({
+            ...row,
+            cont_cuenta_nombre: cuentasMap.get(Number(row.cont_cuenta_id)) || null,
+            cont_concepto_nombre: conceptosMap.get(Number(row.cont_concepto_id)) || null
+        }));
+        res.json(resultadosConNombres);
     }catch (error) {
         console.error("Error al obtener total de fletes por vehículo:", error);
         res.status(500).json({ error: "Error al obtener total de fletes por vehículo" });
     }
+}
+function listarContCuentas(empresaId) {
+    const sql = `SELECT keycodigo, nombre FROM cont_cuenta `;
+    return ejecutarConsultaEnEmpresaPorId(empresaId, sql);
+}
+function listarContConceptos(empresaId) {
+    const sql = `SELECT keycodigo, nombre FROM cont_concepto`;
+    return ejecutarConsultaEnEmpresaPorId(empresaId, sql);
 }

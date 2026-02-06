@@ -11,6 +11,8 @@ type FleteCancelado = {
     fecha_cancelado: string;
     cont_cuenta_id: number | string;
     cont_concepto_id: number | string;
+    cont_cuenta_nombre: string;
+    cont_concepto_nombre: string;
     monto: number;
     monto_moneda: number;
 };
@@ -42,6 +44,14 @@ const ReporteFletes: React.FC = () => {
             })),
         [vehiculos]
     );
+
+    const formatearFecha = (fechaIso: string) => {
+        if (!fechaIso) return "";
+        const soloFecha = fechaIso.split("T")[0];
+        const [anio, mes, dia] = soloFecha.split("-");
+        if (!anio || !mes || !dia) return fechaIso;
+        return `${dia}/${mes}/${anio}`;
+    };
 
     const selectedVehiculoOptions = React.useMemo<MultiValue<VehiculoOption>>(
         () => vehiculoOptions.filter((option) => formBusquedaFletes.vehiculos.includes(option.value)),
@@ -117,6 +127,18 @@ const ReporteFletes: React.FC = () => {
             }),
         }),
         []
+    );
+
+    const totales = React.useMemo(
+        () =>
+            fletesCancelados.reduce(
+                (acc, flete) => ({
+                    monto: acc.monto + Number(flete.monto || 0),
+                    montoMoneda: acc.montoMoneda + Number(flete.monto_moneda || 0),
+                }),
+                { monto: 0, montoMoneda: 0 }
+            ),
+        [fletesCancelados]
     );
 
     return (
@@ -218,9 +240,9 @@ const ReporteFletes: React.FC = () => {
                                 {fletesCancelados.map((flete, index) => (
                                     <tr key={index} className="transition-colors hover:bg-slate-50">
                                         <td className="px-4 py-3 font-medium text-slate-700 border-r border-slate-100">{flete.vehiculo}</td>
-                                        <td className="px-4 py-3 text-slate-600 border-r border-slate-100">{flete.fecha_cancelado}</td>
-                                        <td className="px-4 py-3 text-slate-600 border-r border-slate-100">{flete.cont_cuenta_id}</td>
-                                        <td className="px-4 py-3 text-slate-600 border-r border-slate-100">{flete.cont_concepto_id}</td>
+                                        <td className="px-4 py-3 text-slate-600 border-r border-slate-100">{formatearFecha(flete.fecha_cancelado)}</td>
+                                        <td className="px-4 py-3 text-slate-600 border-r border-slate-100">{flete.cont_cuenta_nombre}</td>
+                                        <td className="px-4 py-3 text-slate-600 border-r border-slate-100">{flete.cont_concepto_nombre}</td>
                                         <td className="px-4 py-3 text-slate-600 border-r border-slate-100 text-right">
                                             {Number(flete.monto || 0).toLocaleString(undefined, { style: "currency", currency: "USD" })}
                                         </td>
@@ -230,6 +252,19 @@ const ReporteFletes: React.FC = () => {
                                     </tr>
                                 ))}
                             </tbody>
+                            <tfoot>
+                                <tr className="bg-slate-50 border-t border-slate-200">
+                                    <td className="px-4 py-3 text-right font-semibold text-slate-700" colSpan={4}>
+                                        Total
+                                    </td>
+                                    <td className="px-4 py-3 font-semibold text-slate-700 text-right border-r border-slate-100">
+                                        {totales.monto.toLocaleString(undefined, { style: "currency", currency: "USD" })}
+                                    </td>
+                                    <td className="px-4 py-3 font-semibold text-slate-700 text-right">
+                                        {totales.montoMoneda.toLocaleString(undefined, { style: "currency", currency: "USD" })}
+                                    </td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 )}
