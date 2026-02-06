@@ -75,7 +75,7 @@ const SeleccionarTasa: React.FC<SeleccionarTasaProps> = ({ value, selectedId, on
                 >
                     {tipoMoneda.map((moneda) => (
                         <option key={moneda.keycodigo} value={moneda.keycodigo}>
-                            {moneda.abreviatura}-{moneda.nacional}
+                            {moneda.abreviatura}
                         </option>
                     ))}
                     <option value="MANUAL">Manual</option>

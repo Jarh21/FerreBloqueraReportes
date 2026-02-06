@@ -155,7 +155,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                         <tbody className="divide-y divide-slate-100">
                                             {historialPagos.map((pago: any, index: number) => {
                                                 const img = getImagenUrl(pago.comprobante_url || pago.comprobante);
-                                                
+
                                                 return (
                                                     <tr key={index} className="hover:bg-slate-50 transition-colors">
                                                         <td className="px-4 py-2 text-slate-500 font-mono text-xs">

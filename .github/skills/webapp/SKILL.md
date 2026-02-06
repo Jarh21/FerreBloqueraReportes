@@ -33,3 +33,7 @@ no_hacer:
 validaciones:
 	- ejecutar lint/build solo si se solicita
 
+comentarios:
+	- agregar un comentario breve explicando la lógica, si la logica es muy compleja explica un poco mas detallado
+	- evitar comentarios obvios o redundantes
+

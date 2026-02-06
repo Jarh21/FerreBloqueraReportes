@@ -154,7 +154,7 @@ export const obtenerAutosFletes = async (req, res) => {
 export const guardarFletesSeleccionados = async (req, res) => {
     
     try {
-        const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes,descripcion, tasaCambio, tipoMonedaNacional } = req.body; 
+        const { empresaId, keycodigos, contCuenta, contConcepto, montoFletes,vehiculos,vehiculoIds,descripcion, tasaCambio,totalPagar, tipoMonedaNacional } = req.body; 
        console.log("tipoMonedaNacional:", tipoMonedaNacional);
        console.log("tasa de cambio",tasaCambio);
         if (!empresaId || keycodigos.length === 0 || !contCuenta || !contConcepto || !montoFletes) {
@@ -163,27 +163,39 @@ export const guardarFletesSeleccionados = async (req, res) => {
         }        
         
        //suma de montoFletes
-        const sumaMontoFletes = montoFletes.reduce((a, b) => a + b, 0);
-        console.log("Suma de montoFletes:", sumaMontoFletes);
+       // const sumaMontoFletes = montoFletes.reduce((a, b) => a + b, 0);
+        const sumaMontoFletes = totalPagar;
         //conseguimos el ultimo comprobante
         const nuevoComprobante = await nuevoComprobanteFlujoEfectivoSiace(empresaId);  
         
-        const montoEnMonedaLocal =  sumaMontoFletes * tasaCambio;
-        console.log("Monto en moneda local:", montoEnMonedaLocal);
+        //verificamos si la moneda es nacional o extranjera si es nacional multiplicamos por la tasa de cambio
+        //si es nacioal monto_moneda se multiplica por la tasa de cambio de lo contrario se deja igual
+        let montoEnMonedaLocal = 0;
+        let montoMoneda = 0;
+        if (tipoMonedaNacional === 1) {
+            //moneda nacional
+            montoEnMonedaLocal =   sumaMontoFletes;
+            montoMoneda = sumaMontoFletes / tasaCambio;
+        } else {
+            //moneda extranjera
+            montoEnMonedaLocal =  sumaMontoFletes;
+            montoMoneda = sumaMontoFletes;
+        }
+                
         //insertamos el asiento contable
         const asientoSql = ` INSERT INTO cont_registro 
         (fecha_de_operacion, comprobante, codcuenta, codconcepto, descripcion, 
          debito, credito, monto_moneda_cuenta_debito, monto_moneda_cuenta_credito, 
          fecha, codusua, usuario, equipo, registrado) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, NOW())`;
-        const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, sumaMontoFletes,0,montoEnMonedaLocal,9,'SISTEMA-REPORTES','SERVER'];
-        await ejecutarConsultaEnEmpresaPorId(empresaId, asientoSql, asientoValores);
+        const asientoValores = [new Date(), nuevoComprobante, contCuenta, contConcepto, descripcion, 0, montoMoneda,0,montoEnMonedaLocal,9,'SISTEMA-FLETES','SERVER'];
+        //DESCOMENTAR PARA GUARDAR EN CONT_REGISTRO---> await ejecutarConsultaEnEmpresaPorId(empresaId, asientoSql, asientoValores);
 
         //guardar en la tabla logistica_fletes_cancelados
-        const valores = keycodigos.map((fleteId, index) => [empresaId, fleteId, new Date(), contCuenta, contConcepto, montoFletes[index],montoFletes[index]*tasaCambio, new Date(), new Date()]);
+        const valores = keycodigos.map((fleteId, index) => [empresaId, fleteId, new Date(), contCuenta, contConcepto, montoFletes[index],montoFletes[index]*tasaCambio, vehiculoIds[index], new Date(), new Date()]);
 
         //insertamos los fletes cancelados
-        const sql = `INSERT INTO logistica_fletes_cancelados (empresa_id,id_factura_tipo_logistica, fecha_cancelado,cont_cuenta_id, cont_concepto_id, monto,monto_moneda,created_at,updated_at) VALUES ?`;
+        const sql = `INSERT INTO logistica_fletes_cancelados (empresa_id,id_factura_tipo_logistica, fecha_cancelado,cont_cuenta_id, cont_concepto_id, monto,monto_moneda,vehiculo_id,created_at,updated_at) VALUES ?`;
         await pool.query(sql, [valores]);
         res.json({ mensaje: "Fletes guardados correctamente" });
     } catch (error) {
@@ -327,3 +339,52 @@ export const obtenerDetalleFacturasPorVehiculo = async (req, res) => {
     }
 }
 
+export const obtenerFletesCancelados = async (req, res) => {
+    try {
+        const { empresaId, fechaDesde, fechaHasta, vehiculos } = req.body;
+        if (!empresaId) {
+            return res.status(400).json({ error: "Faltan parámetros: empresaId" });
+        }
+        const [cuentas, conceptos] = await Promise.all([
+            listarContCuentas(empresaId),
+            listarContConceptos(empresaId)
+        ]);
+        const cuentasMap = new Map(cuentas.map(item => [Number(item.keycodigo), item.nombre]));
+        const conceptosMap = new Map(conceptos.map(item => [Number(item.keycodigo), item.nombre]));
+        const vehiculoIds = (Array.isArray(vehiculos) ? vehiculos : (vehiculo != null ? [vehiculo] : []))
+            .map(v => Number(v))
+            .filter(v => Number.isInteger(v) && v > 0);
+
+        const whereClause = vehiculoIds.length
+            ? `AND f.vehiculo_id IN (${vehiculoIds.map(() => "?").join(",")})`
+            : "";
+
+        if (!empresaId || !fechaDesde || !fechaHasta) {
+            return res.status(400).json({ error: "Faltan parámetros: empresaId, fechaDesde o fechaHasta" });
+        }
+        const sql = `SELECT CONCAT_WS(' ',                     
+                        v.marca, 
+                        v.modelo, 
+                        v.placa
+                    ) AS vehiculo, f.fecha_cancelado,cont_cuenta_id,cont_concepto_id,monto,monto_moneda from logistica_fletes_cancelados f, logistica_vehiculos v where f.empresa_id =? and f.vehiculo_id = v.id and (f.fecha_cancelado BETWEEN ? AND ?) ${whereClause} ORDER BY f.fecha_cancelado DESC
+                `;
+        const [resultados] = await pool.query(sql, [empresaId, fechaDesde, fechaHasta , ...vehiculoIds]);
+        const resultadosConNombres = resultados.map(row => ({
+            ...row,
+            cont_cuenta_nombre: cuentasMap.get(Number(row.cont_cuenta_id)) || null,
+            cont_concepto_nombre: conceptosMap.get(Number(row.cont_concepto_id)) || null
+        }));
+        res.json(resultadosConNombres);
+    }catch (error) {
+        console.error("Error al obtener total de fletes por vehículo:", error);
+        res.status(500).json({ error: "Error al obtener total de fletes por vehículo" });
+    }
+}
+function listarContCuentas(empresaId) {
+    const sql = `SELECT keycodigo, nombre FROM cont_cuenta `;
+    return ejecutarConsultaEnEmpresaPorId(empresaId, sql);
+}
+function listarContConceptos(empresaId) {
+    const sql = `SELECT keycodigo, nombre FROM cont_concepto`;
+    return ejecutarConsultaEnEmpresaPorId(empresaId, sql);
+}
