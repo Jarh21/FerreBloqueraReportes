@@ -8,6 +8,7 @@ import RegistrarVehiculo from "../../../components/logistica/RegistrarVehiculo";
 import SelectConcepto from "../../../components/selectoresContables/SelectConcepto";
 import SeleccionarTasa from "../../../components/finanzas/SeleccionarTasa";
 import HistorialDolar from "../../../components/finanzas/HistorialDolar";
+import FormularioPagoMovil from "../../../components/finanzas/FormularioPagoMovil";
 interface FletesProps {
     keycodigo:number;
     fecha: string;
@@ -262,6 +263,7 @@ const Fletes: React.FC = () => {
     <div className="flex items-end gap-4">
       {validarModulo('Logistica.Fletes.RegistrarVehiculo') ? <RegistrarVehiculo onVehiculoGuardado={handlelistarVehiculos} /> : null}
       <HistorialDolar />
+      <FormularioPagoMovil />
     </div>
     
     {/* Acción secundaria integrada en el label del filtro abajo, o aquí si prefieres un acceso rápido */}
