@@ -4,7 +4,6 @@ import { pool } from "../../config/database.js";
 // CREAR SOLICITUD (CORREGIDO: GUARDA TIPO_PAGO)
 // ----------------------------------------------------
 export const CrearSolicitud = async (req, res) => {
-    
     const connection = await pool.getConnection();
     
     try {
@@ -24,10 +23,14 @@ export const CrearSolicitud = async (req, res) => {
             tipo_pago, 
             solicitante,
             empresa_id,
+            
+            concepto_contable, // <--- 1. RECIBIMOS EL NUEVO CAMPO (STRING)
             concepto,
+            
             monto,
             moneda,      
             tasa,
+            referencia_usd,
             referencia,  
             banco_origen, 
             estado_pago 
@@ -63,20 +66,13 @@ export const CrearSolicitud = async (req, res) => {
             beneficiarioId = result.insertId;
         }
 
-        // -----------------------------------------------------------------------
-        // C. GESTIÓN DE LA CUENTA BANCARIA (AQUÍ ESTÁ LA MODIFICACIÓN)
-        // -----------------------------------------------------------------------
+        // C. GESTIÓN DE LA CUENTA BANCARIA
         if (beneficiarioId && debeGuardar && tipo_pago !== 'EFECTIVO USD') {
-            
-            // CAMBIO: Ahora verificamos también el 'banco'.
-            // Antes: Solo miraba si el teléfono existía.
-            // Ahora: Mira si el teléfono existe EN ESE BANCO ESPECÍFICO.
             const [cuentas] = await connection.query(
                 "SELECT id FROM beneficiarios_cuentas WHERE beneficiario_id = ? AND tipo_pago = ? AND identificador = ? AND banco = ?",
                 [beneficiarioId, tipo_pago, identificador, beneficiario_banco || null]
             );
 
-            // Si no existe esa combinación exacta (ID + Tipo + Identificador + Banco), la insertamos.
             if (cuentas.length === 0) {
                 await connection.query(
                     "INSERT INTO beneficiarios_cuentas (beneficiario_id, tipo_pago, banco, identificador) VALUES (?, ?, ?, ?)",
@@ -84,7 +80,6 @@ export const CrearSolicitud = async (req, res) => {
                 );
             }
         }
-        // -----------------------------------------------------------------------
 
         // 3. SI ERA SOLO REGISTRO, TERMINAMOS AQUÍ
         if (modo_beneficiario === 'solo_registro') {
@@ -92,21 +87,23 @@ export const CrearSolicitud = async (req, res) => {
             return res.status(200).json({ success: true, message: "Beneficiario agregado al directorio correctamente." });
         }
 
-        // 4. CREAR LA SOLICITUD
+        // 4. CREAR LA SOLICITUD (CON LOS NUEVOS CAMPOS)
         const querySolicitud = `
             INSERT INTO detalles_solicitudes 
             (
-                solicitante, empresa_id, concepto, 
+                solicitante, empresa_id, concepto, concepto_contable, /* <--- 2. AGREGAMOS COLUMNA */
                 beneficiario_nombre, beneficiario_rif, beneficiario_banco, beneficiario_identificador, tipo_pago,
-                monto, moneda_pago, tasa_cambio, pago_efectivo, referencia_pago, banco_origen, estado_pago
+                monto, moneda_pago, tasa_cambio, pago_efectivo, referencia_pago, banco_origen, estado_pago,
+                referencia_usd
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) /* <--- Aumentamos un placeholder */
         `;
 
         const [resultSolicitud] = await connection.query(querySolicitud, [
             solicitante,
             empresa_id || 1,
             concepto,
+            concepto_contable || null, // <--- 3. INSERTAMOS EL VALOR
             nombreLimpio,
             rifLimpio, 
             beneficiario_banco || (tipo_pago === 'ZELLE' ? 'ZELLE' : null),
@@ -118,28 +115,25 @@ export const CrearSolicitud = async (req, res) => {
             tipo_pago === 'EFECTIVO USD' ? 1 : 0,
             referencia || null,
             banco_origen || null,
-            estado_pago || 0
+            estado_pago || 0,
+            referencia_usd || null 
         ]);
 
         // 5. NOTIFICACIÓN PUSH
-       if (req.io) {
-            
-            // A. TRUCO: Buscamos el nombre de la empresa rapidito
+        if (req.io) {
             const [infoEmpresa] = await connection.query(
                 "SELECT nombre FROM empresas WHERE id = ?", 
-                [empresa_id || 1] // Usamos el mismo ID que usaste para guardar
+                [empresa_id || 1] 
             );
             
             const nombreEmpresa = infoEmpresa.length > 0 ? infoEmpresa[0].nombre : 'Sistema';
 
-            // B. Emitimos con el nombre incluido
             req.io.emit('nueva_solicitud', {
                 id: resultSolicitud.insertId,
-                mensaje: `Empresa: ${nombreEmpresa} Creada por: ${solicitante}`, // <--- AQUI ESTÁ EL CAMBIO
-                       // <--- Extra data útil
+                mensaje: `Empresa: ${nombreEmpresa} Creada por: ${solicitante}`,
                 monto: monto,
                 moneda: moneda,
-                empresa_id: empresa_id // También mandamos el ID por si acaso el front quiere filtrar
+                empresa_id: empresa_id 
             });
         }
 
@@ -271,20 +265,19 @@ export const ProcesarPago = async (req, res) => {
     try {
         await connection.beginTransaction();
 
-        // Asumiendo que req.user tiene los datos del usuario logueado (gracias al middleware de auth)
-        // Si no tienes req.user.nombre o email, puedes poner 'Sistema' o null
         const usuarioResponsable = req.user ? (req.user.nombre || req.user.email) : 'Sistema';
 
         const { 
             id_solicitud, 
             banco_origen, 
             referencia, 
-            monto_pagado 
+            monto_pagado,
+            tasa_cambio // <--- 1. RECIBIMOS LA TASA
         } = req.body;
 
         const comprobanteUrl = req.file ? `/uploads/comprobantes/${req.file.filename}` : null;
 
-        // 1. OBTENER INFORMACIÓN ACTUAL (Agregamos 'moneda_pago')
+        // 1. OBTENER INFORMACIÓN ACTUAL
         const [solicitud] = await connection.query(
             "SELECT monto, total_pagado, moneda_pago FROM detalles_solicitudes WHERE id = ?", 
             [id_solicitud]
@@ -294,7 +287,7 @@ export const ProcesarPago = async (req, res) => {
             throw new Error("Solicitud no encontrada");
         }
 
-        const datosSolicitud = solicitud[0]; // Guardamos la info para usarla
+        const datosSolicitud = solicitud[0]; 
         const montoTotal = parseFloat(datosSolicitud.monto);
         const pagadoPrevio = parseFloat(datosSolicitud.total_pagado || 0);
         const pagoActual = parseFloat(monto_pagado);
@@ -303,27 +296,27 @@ export const ProcesarPago = async (req, res) => {
         const nuevoTotalPagado = pagadoPrevio + pagoActual;
         
         let nuevoEstado = 0;
-        // Usamos una pequeña tolerancia (0.01) para evitar problemas de redondeo
         if (nuevoTotalPagado >= (montoTotal - 0.01)) { 
-            nuevoEstado = 1; // Pagado completo
+            nuevoEstado = 1; 
         } else {
-            nuevoEstado = 3; // Abonado / Parcial
+            nuevoEstado = 3; 
         }
 
-        // 3. INSERTAR EN EL HISTORIAL (ADAPTADO A TU TABLA REAL)
-        // OJO: 'moneda' es NOT NULL en tu tabla, así que la tomamos de la solicitud padre
+        // 3. INSERTAR EN EL HISTORIAL
+        // Agregamos el campo 'tasa_cambio' a la query
         await connection.query(`
             INSERT INTO pagos_historial 
-            (solicitud_id, monto_pagado, moneda, banco_origen, referencia, comprobante_url, creado_por)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (solicitud_id, monto_pagado, moneda, banco_origen, referencia, comprobante_url, creado_por, tasa_cambio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             id_solicitud, 
             pagoActual, 
-            datosSolicitud.moneda_pago, // Insertamos la moneda (VES/USD)
+            datosSolicitud.moneda_pago, 
             banco_origen, 
             referencia, 
             comprobanteUrl,
-            usuarioResponsable // Guardamos quién registró el pago
+            usuarioResponsable,
+            tasa_cambio || null // <--- 2. INSERTAMOS EL VALOR (o null si no aplica)
         ]);
 
         // 4. ACTUALIZAR LA SOLICITUD PRINCIPAL

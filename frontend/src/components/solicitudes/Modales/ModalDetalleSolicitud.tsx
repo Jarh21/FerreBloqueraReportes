@@ -97,7 +97,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                     <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200">ESTADO DE CUENTA</span>
                                     <div className="h-px bg-green-200 flex-1"></div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-3 gap-3">
                                     <div>
                                         <label className={labelClass}>Monto Total</label>
                                         <div className="text-lg font-black text-slate-700">{formatMonto(solicitud.monto, solicitud.moneda_pago)}</div>
@@ -106,6 +106,12 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                         <label className={labelClass}>Total Pagado</label>
                                         <div className="text-lg font-black text-green-600">{formatMonto(solicitud.total_pagado || 0, solicitud.moneda_pago)}</div>
                                     </div>
+                                    {solicitud.moneda_pago != 'USD' && (
+                                        <div>
+                                        <label className={labelClass}>Tasa solicitada:</label>
+                                        <div className="text-lg font-black text-green-600">  {solicitud.tasa_cambio} </div>
+                                         </div>)}
+                                    
                                     <div>
                                         <label className={labelClass}>Pendiente</label>
                                         <div className={`text-base font-bold ${deudaPendiente > 0.01 ? 'text-red-500' : 'text-slate-400'}`}>

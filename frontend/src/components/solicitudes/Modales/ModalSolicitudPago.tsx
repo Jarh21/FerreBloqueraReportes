@@ -5,6 +5,7 @@ import SelectorTiposPago from '../SelectSolicitudes/SelectorTipoPago';
 import InputBeneficiarioAutocomplete from '../SelectSolicitudes/InputBeneficiarioAutocomplete';
 import { toast } from 'sonner';
 import { buildApiUrl } from '../../../config/api';
+import SelectorContable from '../SelectSolicitudes/SelectorContable'; // <--- Ajusta la ruta si es necesario
 
 const TIPOS_PAGO = {
   BINANCE: "BINANCE",
@@ -51,6 +52,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
   const [formData, setFormData] = useState({
     solicitante: usuario?.nombre,
     tipo_pago: '',
+    concepto_contable: '',
     concepto: '',
     cuenta_contable_id: '',
     beneficiario_id_seleccionado: '', 
@@ -62,7 +64,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     beneficiario_email: '', 
     monto: 0,      
     tasa: tasaBCV, 
-    monto_calculado: 0,
+    monto_calculado: 0, // En VES: Dolares. En USD: Bolívares (aunque no se use mucho)
     referencia: '',
     banco_origen: '',
     comprobante: null as File | null
@@ -99,21 +101,26 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     setFormData(prev => ({ ...prev, beneficiario_rif: rifCompleto }));
   }, [rifPrefijo, rifNumero]);
 
+  // Efecto de Tasa: Si cambia la tasa o la moneda, recalculamos
   useEffect(() => {
     let nuevaTasa = formData.tasa;
     if (origenTasa === 'BCV') nuevaTasa = tasaBCVEnLinea || tasaBCV;
     else if (origenTasa === 'EURO') nuevaTasa = tasaEuro;
 
-    if (origenTasa !== 'MANUAL' && moneda === 'VES') {
-        const refDolares = nuevaTasa > 0 ? (formData.monto / nuevaTasa) : 0;
-        setFormData(prev => ({ 
-            ...prev, 
-            tasa: nuevaTasa,
-            monto_calculado: parseFloat(refDolares.toFixed(2))
-        }));
-    } else {
-        setFormData(prev => ({ ...prev, tasa: nuevaTasa }));
-    }
+    // Si estamos en VES, recalculamos la referencia en Dólares (monto_calculado)
+    // basado en el monto en Bs actual, o viceversa.
+    // Para evitar bucles, solo actualizamos la tasa en el estado y dejamos que el usuario escriba,
+    // a menos que ya haya un valor escrito.
+    
+    setFormData(prev => {
+        let nuevoCalculado = prev.monto_calculado;
+        // Si hay monto en Bs y cambiamos tasa, ajustamos la referencia USD
+        if (moneda === 'VES' && prev.monto > 0 && nuevaTasa > 0) {
+             nuevoCalculado = parseFloat((prev.monto / nuevaTasa).toFixed(2));
+        }
+        return { ...prev, tasa: nuevaTasa, monto_calculado: nuevoCalculado };
+    });
+
   }, [origenTasa, tasaBCV, tasaEuro, moneda, tasaBCVEnLinea]);
 
   const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,10 +129,8 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
       setFormData(prev => ({ ...prev, [name]: valorLimpio }));
   };
 
-  // --- CAMBIO PRINCIPAL: FORZAR MAYÚSCULAS ---
   const handleChange = (e: { target: { name: string; value: any } }) => {
     const { name, value } = e.target;
-    // Aplicamos toUpperCase() para guardar en mayúsculas
     const valorFinal = typeof value === 'string' ? value.toUpperCase() : value;
     setFormData(prev => ({ ...prev, [name]: valorFinal }));
   };
@@ -147,6 +152,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
           beneficiario_email: '',
           tipo_pago: '',
           monto: 0,
+          monto_calculado: 0,
           concepto: ''
       }));
   };
@@ -209,10 +215,12 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
       }
   };
 
+  // --- LÓGICA BIDIRECCIONAL FINANCIERA ---
   const handleFinancialChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     const valorNumerico = parseFloat(value) || 0;
 
+    // Si escribo en "monto" (Bs si es VES, $ si es USD)
     if (name === 'monto') {
         const nuevaRef = formData.tasa > 0 ? valorNumerico / formData.tasa : 0;
         setFormData(prev => ({
@@ -221,6 +229,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
             monto_calculado: parseFloat(nuevaRef.toFixed(2))
         }));
     } 
+    // Si escribo en "monto_calculado" (Referencia $ si es VES)
     else if (name === 'monto_calculado') {
         const nuevosBs = valorNumerico * formData.tasa;
         setFormData(prev => ({
@@ -229,6 +238,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
             monto: parseFloat(nuevosBs.toFixed(2))
         }));
     }
+    // Si cambio la tasa manual
     else if (name === 'tasa') {
         const nuevaRef = valorNumerico > 0 ? formData.monto / valorNumerico : 0;
         setFormData(prev => ({
@@ -272,6 +282,11 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
 
     setLoading(true);
 
+    // --- LÓGICA DE REFERENCIA USD (Paso 3 del plan) ---
+    // Si la moneda es VES, la referencia real son los Dólares que calculamos (monto_calculado)
+    // Si la moneda es USD, la referencia es el mismo monto.
+    const valorReferenciaUsd = moneda === 'VES' ? formData.monto_calculado : formData.monto;
+
     const payload = {
         modo_beneficiario: modoBeneficiario, 
         guardar_en_directorio: guardarBeneficiario,
@@ -284,10 +299,12 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
         tipo_pago: formData.tipo_pago,
         solicitante: formData.solicitante,
         empresa_id: empresaId,
+        concepto_contable: formData.concepto_contable,
         concepto: formData.concepto,
         monto: formData.monto,
         moneda: moneda, 
         tasa: formData.tasa,
+        referencia_usd: valorReferenciaUsd, // <--- CAMPO NUEVO PARA LA BD
         estado_pago: accionBoton === 'pagar' ? 1 : 0,
         referencia: formData.referencia,
         banco_origen: formData.banco_origen
@@ -328,11 +345,10 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
 
   if (!isOpen) return null;
 
-  // --- AQUI SE AGREGO LA CLASE 'uppercase' PARA EL VISUAL ---
   const inputClass = "w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-700 outline-none transition-all uppercase";
   const labelClass = "text-[10px] font-bold text-slate-400 uppercase ml-1";
 
-  // Helper Inputs
+  // Helper Inputs (RIF, Concepto, Campos Manuales se mantienen igual)
   const renderRifInput = () => (
       <div className="space-y-1">
           <label className={labelClass}>Cédula/RIF</label>
@@ -358,14 +374,35 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
   );
 
   const renderConceptoInput = () => {
-      if (modoBeneficiario === 'solo_registro') return null;
-      return (
-          <div className="space-y-1">
-              <label className={labelClass}>Concepto / Nota</label>
-              <input name="concepto" value={formData.concepto} onChange={handleChange} className={inputClass} />
-          </div>
-      );
-  };
+    // Si solo estamos registrando un beneficiario, no pedimos datos contables
+    if (modoBeneficiario === 'solo_registro') return null;
+
+    return (
+        <>
+            {/* 1. SELECTOR CONTABLE (Ocupa todo el ancho) */}
+            <div className="space-y-1 md:col-span-3">
+                <label className={labelClass}>Clasificación Contable</label>
+                <SelectorContable 
+                    value={formData.concepto_contable}
+                    onChange={(val) => setFormData(prev => ({ ...prev, concepto_contable: val || '' }))}
+                    className="w-full"
+                />
+            </div>
+
+            {/* 2. INPUT DE CONCEPTO / NOTA (El original) */}
+            <div className="space-y-1 md:col-span-3">
+                <label className={labelClass}>Concepto / Nota</label>
+                <input 
+                    name="concepto" 
+                    value={formData.concepto} 
+                    onChange={handleChange} 
+                    className={inputClass} 
+                    placeholder="Descripción detallada del pago..."
+                />
+            </div>
+        </>
+    );
+};
 
   const renderCamposManuales = () => {
      const nombreInputClass = camposIdentidadBloqueados 
@@ -445,6 +482,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-slate-200">
         
+        {/* Header Modal */}
         <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
             <h3 className="text-xl font-black text-slate-800">
                 {modoBeneficiario === 'solo_registro' ? 'Agregar ' : 'Nueva '} 
@@ -457,7 +495,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
         
         <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             
-            {/* Slider Modo */}
+            {/* Slider de Modo */}
             <div className="md:col-span-3 flex justify-center mb-4">
                 <div className={`bg-slate-100 p-0.5 rounded-lg inline-flex shadow-inner ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
                     <button type="button" onClick={() => setModoBeneficiario('nuevo')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${modoBeneficiario === 'nuevo' ? 'bg-white text-red-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>+ Nuevo Pago</button>
@@ -469,7 +507,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
             {/* Campos Comunes */}
             <div className="space-y-1"><label className={labelClass}>Solicitante </label><input name="solicitante" value={formData.solicitante} onChange={handleChange} required className={inputClass} disabled/></div>
             
-            {/* Área Dinámica */}
+            {/* Sección Dinámica */}
             <div className="md:col-span-3 border-t border-slate-100 mt-2 pt-4 bg-slate-50/50 p-4 rounded-lg">
                 {modoBeneficiario === 'registrado' ? (
                     <div className="flex flex-col gap-4">
@@ -509,35 +547,23 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                          )}
                     </div>
                 ) : (
+                    /* ... Lógica para modo nuevo/solo_registro (igual que antes) ... */
                     <>
                         <div className="flex justify-between items-center mb-2">
                             <h4 className="text-sm font-bold text-slate-700">
                                 {modoBeneficiario === 'solo_registro' ? 'Datos para el Directorio' : 'Datos del Nuevo Beneficiario'}
                             </h4>
-                            
+                            {/* Checkboxes de agregar/guardar ... (omitidos por brevedad, no cambian) */}
                             {modoBeneficiario === 'solo_registro' && (
                                 <label className="flex items-center cursor-pointer select-none mr-2">
                                     <div className="relative">
-                                        <input 
-                                            type="checkbox" 
-                                            className="sr-only" 
-                                            checked={agregarAExistente} 
-                                            onChange={(e) => {
-                                                setAgregarAExistente(e.target.checked);
-                                                if(!e.target.checked) {
-                                                    setFormData(prev => ({...prev, beneficiario_nombre: '', beneficiario_rif: '', beneficiario_id_seleccionado: ''}));
-                                                    setRifPrefijo('V'); setRifNumero('');
-                                                }
-                                            }} 
-                                            disabled={loading} 
-                                        />
+                                        <input type="checkbox" className="sr-only" checked={agregarAExistente} onChange={(e) => { setAgregarAExistente(e.target.checked); if(!e.target.checked) { setFormData(prev => ({...prev, beneficiario_nombre: '', beneficiario_rif: '', beneficiario_id_seleccionado: ''})); setRifPrefijo('V'); setRifNumero(''); } }} disabled={loading} />
                                         <div className={`block w-9 h-5 rounded-full transition-colors ${agregarAExistente ? 'bg-blue-600' : 'bg-slate-300'}`}></div>
                                         <div className={`dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform ${agregarAExistente ? 'transform translate-x-4' : ''}`}></div>
                                     </div>
                                     <div className="ml-2 text-xs font-bold text-slate-600">Agregar a Existente</div>
                                 </label>
                             )}
-                            
                             {modoBeneficiario !== 'solo_registro' && formData.tipo_pago !== TIPOS_PAGO.EFECTIVO && (
                                 <label className="flex items-center cursor-pointer select-none">
                                     <div className="relative">
@@ -552,11 +578,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
 
                         {modoBeneficiario === 'solo_registro' && agregarAExistente && (
                             <div className="mb-4 animate-fade-in-down">
-                                <InputBeneficiarioAutocomplete 
-                                    onSelect={handleBeneficiarioSeleccionado}
-                                    disabled={loading}
-                                    className="w-full border-2 border-blue-100 rounded-lg"
-                                />
+                                <InputBeneficiarioAutocomplete onSelect={handleBeneficiarioSeleccionado} disabled={loading} className="w-full border-2 border-blue-100 rounded-lg" />
                                 <p className="text-[10px] text-blue-500 mt-1 ml-1">* Busque al beneficiario para agregarle una cuenta nueva.</p>
                             </div>
                         )}
@@ -569,7 +591,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 )}
             </div>
 
-            {/* Finanzas */}
+            {/* --- SECCIÓN FINANCIERA REDISEÑADA (Paso 2 y 3 del plan) --- */}
             {modoBeneficiario !== 'solo_registro' && (
                 <div className="md:col-span-3 border-t border-slate-100 mt-0.5 pt-1">
                     <div className="flex justify-between items-end mb-0.5">
@@ -583,24 +605,31 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                        <div className="space-y-1">
-                            <label className={labelClass}>Monto ({moneda === 'VES' ? 'Bolívares' : 'USD'})</label>
-                            <div className="relative">
-                                <input 
-                                    type="number" 
-                                    step="0.01" 
-                                    name="monto" 
-                                    value={formData.monto || ''} 
-                                    onChange={moneda === 'VES' ? handleFinancialChange : handleChange} 
-                                    required={modoBeneficiario !== 'solo_registro'}
-                                    className={`${inputClass} pl-8 font-mono font-bold text-slate-700`} 
-                                />
-                                <span className="absolute left-3 top-2.5 text-slate-400 text-xs font-bold">{moneda === 'USD' ? '$' : 'Bs'}</span>
-                            </div>
-                        </div>
                         
-                        {moneda === 'VES' && (
+                        {/* LÓGICA DE INTERCAMBIO DE INPUTS:
+                            Si es VES: Arriba Dólares (Referencia), Abajo Bolívares (Pago).
+                            Si es USD: Arriba Dólares (Pago).
+                        */}
+
+                        {moneda === 'VES' ? (
                             <>
+                                {/* 1. INPUT DE REFERENCIA ($) - PRIMERO */}
+                                <div className="space-y-1">
+                                    <label className={`${labelClass} text-blue-600`}>Referencia en Divisa ($)</label>
+                                    <div className="relative">
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            name="monto_calculado" 
+                                            value={formData.monto_calculado || ''} 
+                                            onChange={handleFinancialChange} 
+                                            className={`${inputClass} pl-8 bg-blue-50 text-blue-800 font-bold border-blue-200`} 
+                                        />
+                                        <span className="absolute left-3 top-2.5 text-blue-400 text-xs font-bold">$</span>
+                                    </div>
+                                </div>
+
+                                {/* 2. TASA DE CAMBIO - MEDIO */}
                                 <div className="space-y-1">
                                     <label className={labelClass}>Tasa de Cambio</label>
                                     <div className="flex">
@@ -632,21 +661,40 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                     )}
                                 </div>
 
+                                {/* 3. INPUT DE PAGO (Bs) - ÚLTIMO */}
                                 <div className="space-y-1">
-                                    <label className={labelClass}>Ref. en Divisa ($)</label>
+                                    <label className={labelClass}>Monto a Pagar (Bs)</label>
                                     <div className="relative">
                                         <input 
                                             type="number" 
-                                            step="0.01"
-                                            name="monto_calculado" 
-                                            value={formData.monto_calculado || ''} 
+                                            step="0.01" 
+                                            name="monto" 
+                                            value={formData.monto || ''} 
                                             onChange={handleFinancialChange} 
-                                            className={`${inputClass} pl-8 bg-white text-slate-700 border-dashed`} 
+                                            required={modoBeneficiario !== 'solo_registro'}
+                                            className={`${inputClass} pl-8 font-mono font-bold text-slate-700`} 
                                         />
-                                        <span className="absolute left-3 top-2.5 text-slate-400 text-xs font-bold">$</span>
+                                        <span className="absolute left-3 top-2.5 text-slate-400 text-xs font-bold">Bs</span>
                                     </div>
                                 </div>
                             </>
+                        ) : (
+                            // MONEDA USD
+                            <div className="space-y-1">
+                                <label className={labelClass}>Monto ($)</label>
+                                <div className="relative">
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        name="monto" 
+                                        value={formData.monto || ''} 
+                                        onChange={handleChange} 
+                                        required={modoBeneficiario !== 'solo_registro'}
+                                        className={`${inputClass} pl-8 font-mono font-bold text-slate-700`} 
+                                    />
+                                    <span className="absolute left-3 top-2.5 text-slate-400 text-xs font-bold">$</span>
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -654,46 +702,26 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
 
             {/* Footer y Botones */}
             <div className="md:col-span-3 flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
-                
-                {/* BOTÓN PAPELERA (IZQUIERDA) */}
+                {/* Botón Papelera */}
                 <div>
                     {(modoBeneficiario === 'nuevo' || modoBeneficiario === 'registrado') && (
-                        <button 
-                            type="button" 
-                            onClick={handleLimpiarCampos}
-                            className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full transition-all group"
-                            title="Limpiar todos los campos"
-                        >
-                            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                        <button type="button" onClick={handleLimpiarCampos} className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full transition-all group" title="Limpiar todos los campos">
+                            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     )}
                 </div>
 
-                {/* BOTONES DE ACCIÓN (DERECHA) */}
+                {/* Botones de Acción */}
                 <div className="flex gap-3">
-                    <button type="button" onClick={onClose} disabled={loading} className="px-6 py-2 rounded-lg text-slate-600 font-medium hover:bg-slate-50 disabled:opacity-50">
-                        Cancelar
-                    </button>
+                    <button type="button" onClick={onClose} disabled={loading} className="px-6 py-2 rounded-lg text-slate-600 font-medium hover:bg-slate-50 disabled:opacity-50">Cancelar</button>
                     
-                    <button 
-                        type="submit" 
-                        onClick={() => setAccionBoton('guardar')}
-                        disabled={loading}
-                        className={`bg-red-700 text-white px-8 py-2 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 active:scale-95 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
+                    <button type="submit" onClick={() => setAccionBoton('guardar')} disabled={loading} className={`bg-red-700 text-white px-8 py-2 rounded-lg font-bold hover:bg-red-800 shadow-lg shadow-red-100 active:scale-95 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                         {loading ? 'Procesando...' : (modoBeneficiario === 'solo_registro' ? 'Guardar Beneficiario' : 'Guardar Solicitud')}
                     </button>
 
                     {modoBeneficiario !== 'solo_registro' && formData.tipo_pago === TIPOS_PAGO.EFECTIVO && (
-                        <button 
-                            type="submit" 
-                            onClick={() => setAccionBoton('pagar')}
-                            disabled={loading}
-                            className={`bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700 shadow-lg shadow-green-100 active:scale-95 flex items-center gap-2 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            {!loading && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z" /></svg>}
+                        <button type="submit" onClick={() => setAccionBoton('pagar')} disabled={loading} className={`bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700 shadow-lg shadow-green-100 active:scale-95 flex items-center gap-2 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            {!loading && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z" /></svg>}
                             {loading ? 'Pagando...' : 'Pagar Ahora'}
                         </button>
                     )}
