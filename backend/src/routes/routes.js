@@ -13,6 +13,7 @@ import { authMiddleware, adminMiddleware } from "../middleware/auth.js"
 import { obtenerEmpresas, obtenerTodasEmpresas, crearEmpresa, actualizarEmpresa, obtenerEmpresasPorUsuario } from "../modules/empresas/empresas.controller.js"
 // Finanzas
 import {obtenerCatalogoTipoMoneda,obtenerHistorialTasaTipoMoneda,registrarHistorialTasaTipoMoneda,editarHistorialTasaTipoMoneda,obtenerTodosTipoMoneda,obtenerContContable,obtenerFinanzas,crearFinanza,listaAsesores,guardarCuadreArqueoCerrado,exportarAlFlujoEfectivoSiace,obtenerGastosPorFecha,obtenerTasaDiaSiace,obtenerTodoEfectivoDetallado,obtenerTodoEfectivoEgresos,listarArqueosCerrados,obtenerModosPagoDetalle,obtenerDenominaciones,eliminarCuadreArqueoEgreso,guardarDenominacionesCuadre,guardarCuadreArqueoIngreso,obtenerCuadreEfectivoDetallado,eliminarCuadreEfectivoDetallado,obtenerDatosArqueoAsesor,obtenerConceptosContables,guardarCuadreArqueoGasto,obtenerCuadreArqueoEgresos,obtenerSumatoriaModosPagoAsesor,guardarObservacionGeneralCuadreAsesor,obtenerObservacionGeneralCaudreAsesor,listarObservacionesGeneralCuadreAsesor,listarObservacionesGeneralCuadre,editarGastosAsesor,obtenerTotalEfectivoMovPagos,obtenerTotalEfectivoYGastosAgrupadosPorAsesor,eliminarObservacionGeneralCaudreAsesor,buscarFlujoEfectivoSiacePorFecha} from "../modules/finanzas/finanzas.controller.js"
+import {realizarPagoMovilBDV, consultarSaldoBDV } from "../modules/finanzas/bdv.controller.js";
 // Reportes
 import { obtenerEstadoProveedores, obtenerVentas, obtenerSaldos, totalSaldoEmpresa } from "../modules/reportes/reportes.controller.js"
 // Usuarios
@@ -23,6 +24,8 @@ import { ObtenerEntidades} from "../modules/solicitudes/entidades.controller.js"
 import { CrearSolicitud, ObtenerSolicitudes, BuscarBeneficiarios, ProcesarPago, AnularSolicitud, EditarSolicitud } from "../modules/solicitudes/solicitudes.controller.js";
 //chatbot
 import { obtenerRespuestaChatbot } from "../modules/chatbot/chatbot.controller.js";
+
+
 // --- CONFIGURACIÓN DE MULTER (CARGA DE IMÁGENES) ---
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -137,5 +140,10 @@ router.get("/solicitudes/entidades",  ObtenerEntidades)
 
 //chatbot
 router.post("/chatbot/obtener-respuesta", authMiddleware, obtenerRespuestaChatbot);
+
+//apis para los Bancos
+
+router.get("/bancos/bdv/saldo/:empresaId", authMiddleware, consultarSaldoBDV);
+router.post("/bancos/bdv/pago-movil", authMiddleware, realizarPagoMovilBDV);
 
 export default router

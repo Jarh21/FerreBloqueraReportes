@@ -1,10 +1,9 @@
 "use client"
-import type React from "react"
 import { useEffect, useState } from "react"
 import { useAuth } from "../../context/AuthContext"
 import axios from "axios"
 import { buildApiUrl } from '../../config/api';
-
+import LabelSaldoBDV from "../../components/finanzas/LabelSaldoBDV"
 interface Saldo {
   Tipo_Cuenta:String
   Total_VES_USD: String
@@ -12,9 +11,10 @@ interface Saldo {
   Dolares_Paralelo: String
 }
 
+
 export default function Inicio() {
   const { usuario, empresaActual, empresas } = useAuth()
-  const [saldos, setSaldos] = useState<Saldo[]>([])
+  const [saldos, setSaldos] = useState<Saldo[]>([])  
 
    useEffect(() => {
     saldoPorEmpresa()
@@ -26,14 +26,11 @@ export default function Inicio() {
         withCredentials: true,
       })
       setSaldos(response.data);
-      console.log("Saldo Total:", saldos);
+      
     } catch (err) {
       console.error(`Error al obtener el saldo de la empresa`, err);
     }
   }
-
-
-
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen">
       <div className="max-w-8xl mx-auto">
@@ -46,6 +43,8 @@ export default function Inicio() {
             <div className="flex items-center gap-2 mt-2 text-slate-500 font-medium">
               <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
               Empresa actual: <span className="text-slate-700 font-bold">{empresaActual?.nombre}</span>
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Saldo BDV: <LabelSaldoBDV empresaid={empresaActual?.id || ""} />
             </div>
           </div>
           {/* Decoración sutil de fondo */}
@@ -54,6 +53,7 @@ export default function Inicio() {
 
         {/* Grid Configurable: De 2 en 2 en Desktop (se adapta si hay 4, 5 o más) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              
           {empresas.map((empresa) => (
             <div 
               key={empresa.id} 
