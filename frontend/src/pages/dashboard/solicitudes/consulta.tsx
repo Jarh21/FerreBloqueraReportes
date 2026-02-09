@@ -14,27 +14,23 @@ const ConsultaPagos: React.FC = () => {
   
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [solicitudes, setSolicitudes] = useState<any[]>([]); // Toda la data (o la data filtrada por fecha del server)
-  const [solicitudesFiltradas, setSolicitudesFiltradas] = useState<any[]>([]); // Data visible en tabla
+  const [solicitudes, setSolicitudes] = useState<any[]>([]); 
+  const [solicitudesFiltradas, setSolicitudesFiltradas] = useState<any[]>([]); 
 
   // Estado para Modal DETALLES
   const [isDetalleOpen, setIsDetalleOpen] = useState(false);
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<any>(null);
 
-
-  
   // --- ESTADO DE LOS FILTROS ---
   const [filtros, setFiltros] = useState({
       fechaInicio: '',
       fechaFin: '',
       beneficiario: '',
       metodoPago: '', 
-      estatus: '',    
+      estatus: '',     
       bancoOrigen: ''
   });
 
-  
-  
   // Carga inicial (sin filtros)
   useEffect(() => {
     if (empresaActual?.id) {
@@ -42,7 +38,7 @@ const ConsultaPagos: React.FC = () => {
     }
   }, [empresaActual?.id]);
 
-  // --- FUNCIÓN DE CARGA DE DATOS (AHORA ACEPTA FECHAS) ---
+  // --- FUNCIÓN DE CARGA DE DATOS ---
   const obtenerSolicitudes = async (filtrosFecha?: { desde: string, hasta: string }) => {
     if (!empresaActual?.id) return [];
 
@@ -51,7 +47,6 @@ const ConsultaPagos: React.FC = () => {
       setError(null);
       const endpoint = `/solicitudes/listar/${empresaActual.id}`; 
       
-      // Enviamos las fechas como query params al backend
       const response = await axios.get(buildApiUrl(endpoint), {
         withCredentials: true,
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
@@ -63,14 +58,16 @@ const ConsultaPagos: React.FC = () => {
 
       const data = Array.isArray(response.data) ? response.data : (response.data?.rows ?? []);
       
-      setSolicitudes(data); // Guardamos lo que trajo el servidor
+      setSolicitudes(data); // Guardamos TODA la data
       
-      // Si fue una carga automática (sin filtros explícitos), mostramos todo
+      // CAMBIO 1: FILTRO INICIAL
+      // Si no hay filtros de fecha (carga inicial o reset), mostramos todo MENOS las anuladas
       if (!filtrosFecha) {
-          setSolicitudesFiltradas(data);
+          const dataVisible = data.filter((s: any) => s.estado_pago !== 2);
+          setSolicitudesFiltradas(dataVisible);
       }
 
-      return data; // Retornamos para que handleBuscar pueda usarlo inmediatamente
+      return data; 
 
     } catch (err: any) {
       console.error("Error fetching:", err);
@@ -81,26 +78,22 @@ const ConsultaPagos: React.FC = () => {
     }
   };
 
-  // --- MANEJO DE FILTROS ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setFiltros({
           ...filtros,
           [e.target.name]: e.target.value
       });
   };
-// Adaptador para el SelectCuenta
-const handleCuentaChange = (valor: number | string | null) => {
+
+  const handleCuentaChange = (valor: number | string | null) => {
     setFiltros(prev => ({
         ...prev,
-        // Si el valor es null (limpiaron el select), guardamos string vacío
-        // Si viene un valor, lo guardamos.
         bancoOrigen: valor ? String(valor) : '' 
     }));
-};
-  // --- BUSCADOR HÍBRIDO (SERVIDOR + LOCAL) ---
+  };
+
+  // --- BUSCADOR HÍBRIDO ---
   const handleBuscar = async () => {
-      // 1. FILTRO DE SERVIDOR (Fechas)
-      // Pedimos datos frescos a la base de datos respetando el rango
       const dataServidor = await obtenerSolicitudes({
           desde: filtros.fechaInicio,
           hasta: filtros.fechaFin
@@ -108,11 +101,9 @@ const handleCuentaChange = (valor: number | string | null) => {
 
       if (!dataServidor) return;
 
-      // 2. FILTROS LOCALES (Texto, Estatus, etc.)
-      // Sobre los datos que llegaron, aplicamos los filtros de "lupa"
       let resultado = [...dataServidor];
 
-      // Filtro por Beneficiario (Texto)
+      // Filtro por Beneficiario
       if (filtros.beneficiario) {
           const termino = filtros.beneficiario.toLowerCase();
           resultado = resultado.filter((s: any) => 
@@ -133,10 +124,14 @@ const handleCuentaChange = (valor: number | string | null) => {
           );
       }
 
-      // Filtro por Estatus
+      // CAMBIO 2: LÓGICA DE ESTATUS
       if (filtros.estatus) {
+          // Si elige un estatus (incluso el 2), mostramos eso
           const estatusNum = parseInt(filtros.estatus);
           resultado = resultado.filter((s: any) => s.estado_pago === estatusNum);
+      } else {
+          // Si NO elige estatus (está vacio/default), ocultamos anuladas
+          resultado = resultado.filter((s: any) => s.estado_pago !== 2);
       }
 
       setSolicitudesFiltradas(resultado);
@@ -151,18 +146,14 @@ const handleCuentaChange = (valor: number | string | null) => {
           estatus: '',
           bancoOrigen: ''
       });
-      // Recargamos todo sin filtros de fecha
       obtenerSolicitudes();
   };
 
-  // --- FORMATO DE FECHA SEGURO (SOLUCIÓN AL DÍA ANTERIOR) ---
   const formatoFecha = (fechaStr: string) => {
     if (!fechaStr) return '-';
-    // Tomamos solo los primeros 10 caracteres "YYYY-MM-DD" para evitar problemas de zona horaria
     return fechaStr.substring(0, 10).split('-').reverse().join('/');
   };
 
-  // --- EXPORTAR A CSV ---
   const handleExportarCSV = () => {
       if (solicitudesFiltradas.length === 0) return;
 
@@ -176,7 +167,7 @@ const handleCuentaChange = (valor: number | string | null) => {
 
           return [
             sol.id,
-            formatoFecha(sol.creado_en), // Usamos la función segura
+            formatoFecha(sol.creado_en), 
             `"${sol.beneficiario_nombre}"`,
             sol.beneficiario_rif,
             sol.tipo_pago,
@@ -227,7 +218,6 @@ const handleCuentaChange = (valor: number | string | null) => {
         <h3 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Consulta Histórica y Reportes</h3>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            {/* Fila 1 */}
             <div>
                 <label className={labelFilterClass}>Fecha Inicio</label>
                 <input type="date" name="fechaInicio" value={filtros.fechaInicio} onChange={handleInputChange} className={inputFilterClass} />
@@ -238,28 +228,18 @@ const handleCuentaChange = (valor: number | string | null) => {
             </div>
            <div className="md:col-span-2">
                 <label className={labelFilterClass}>Beneficiario / RIF</label>
-                
                 <InputBeneficiarioAutocomplete 
                     className={inputFilterClass}
                     disabled={loading}
-                    
-                    // LÓGICA DE INTEGRACIÓN:
                     onSelect={(item) => {
                         setFiltros(prev => ({
                             ...prev,
                             beneficiario: item.nombre 
                         }));
                     }}
-
                 className={`w-full [&_input]:p-2 [&_input]:pl-9 [&_input]:left-15 [&_input]:text-xs [&_input]:bg-slate-50 [&_input]:border-slate-200 [&_input]:rounded-lg `}/>
-                
-                {/* Nota visual: Como el componente 'InputBeneficiarioAutocomplete' maneja su propio estado interno 'query',
-                    al dar clic en "Limpiar Filtros", el texto visual dentro del input no se borrará automáticamente 
-                    a menos que modifiquemos el componente hijo. Pero la lógica de filtrado funcionará correctamente. */}
-
             </div>
 
-            {/* Fila 2 */}
             <div>
                 <label className={labelFilterClass}>Método Pago</label>
                 <select name="metodoPago" value={filtros.metodoPago} onChange={handleInputChange} className={inputFilterClass}>
@@ -272,9 +252,10 @@ const handleCuentaChange = (valor: number | string | null) => {
                 </select>
             </div>
             <div>
+                {/* CAMBIO 3: ETIQUETA CLARA */}
                 <label className={labelFilterClass}>Estatus</label>
                 <select name="estatus" value={filtros.estatus} onChange={handleInputChange} className={inputFilterClass}>
-                    <option value="">Todos</option>
+                    <option value="">Activos (Ocultar Anuladas)</option> 
                     <option value="1">Pagados</option>
                     <option value="0">Pendientes</option>
                     <option value="3">Abonados</option>
@@ -282,23 +263,18 @@ const handleCuentaChange = (valor: number | string | null) => {
                 </select>
             </div>
              
-             {/* Fila 3 */}
              <div className="md:col-span-2">
-           
-               <div className="md:col-span-2">
-    <label className={labelFilterClass}>Banco de Origen (Cuenta)</label>
-    <SelectCuenta 
-    value={filtros.bancoOrigen ? Number(filtros.bancoOrigen) : null} 
-    onChange={(val) => handleCuentaChange(val)} 
-    // Usamos text-xs y quitamos paddings externos que puedan estorbar
-    className="text-xs w-full" 
-/>
-    
-</div>
+                <div className="md:col-span-2">
+                    <label className={labelFilterClass}>Banco de Origen (Cuenta)</label>
+                    <SelectCuenta 
+                    value={filtros.bancoOrigen ? Number(filtros.bancoOrigen) : null} 
+                    onChange={(val) => handleCuentaChange(val)} 
+                    className="text-xs w-full" 
+                />
+                </div>
             </div>
         </div>
 
-        {/* Botones de Acción Filtros */}
         <div className="flex justify-between items-center pt-3 border-t border-slate-100">
             <div className="flex gap-2">
                 <button onClick={handleBuscar} className="bg-slate-900 text-white px-5 py-2 rounded-lg text-xs font-bold hover:bg-black transition-colors flex items-center gap-2">
@@ -320,7 +296,6 @@ const handleCuentaChange = (valor: number | string | null) => {
       {/* ---------------- SECCIÓN DE TABLA ---------------- */}
       <div className="p-6 bg-white rounded-xl shadow-lg border border-slate-200">
         
-        {/* Loading & Error */}
         {loading && (
             <div className="flex items-center justify-center py-10 gap-3 text-slate-500">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-700"></div>
@@ -334,7 +309,6 @@ const handleCuentaChange = (valor: number | string | null) => {
             </div>
         )}
 
-        {/* Tabla */}
         {!loading && !error && (
             solicitudesFiltradas.length > 0 ? (
                 <>
@@ -390,8 +364,6 @@ const handleCuentaChange = (valor: number | string | null) => {
                                 <td className="px-4 py-3 text-center">
                                     {getStatusBadge(sol.estado_pago)}
                                 </td>
-
-                                {/* COLUMNA DE ACCIONES: SOLO DETALLES */}
                                 <td className="px-4 py-3 text-center">
                                     <button 
                                         onClick={() => abrirDetalles(sol)}
@@ -419,7 +391,6 @@ const handleCuentaChange = (valor: number | string | null) => {
         )}
       </div>
 
-      {/* MODAL DETALLES (SOLO LECTURA) */}
       <ModalDetalleSolicitud
         isOpen={isDetalleOpen}
         onClose={() => setIsDetalleOpen(false)}
