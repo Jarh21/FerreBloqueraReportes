@@ -78,11 +78,12 @@ const FormularioPagoMovil: React.FC = () => {
 				setSuccessMsg("Pago movil procesado correctamente.");
 				closeModal();
 			} else {
-				setErrorMsg(response?.data?.message || "No se pudo procesar el pago movil.");
+				setErrorMsg(response?.data?.message + " (Código: " + response?.data?.code + ")" || "No se pudo procesar el pago movil.");
 			}
 		} catch (error: any) {
 			const apiMessage = error?.response?.data?.message;
-			setErrorMsg(apiMessage || "No se pudo procesar el pago movil.");
+			const apiCodigo = error?.response?.data?.code;
+			setErrorMsg(apiMessage + " (Código: " + apiCodigo + ")" || "No se pudo procesar el pago movil.");
 		} finally {
 			setLoading(false);
 		}

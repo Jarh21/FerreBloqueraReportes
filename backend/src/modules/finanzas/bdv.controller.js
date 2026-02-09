@@ -40,40 +40,37 @@ export const consultarSaldoBDV = async function (req, res) {
 
 export const realizarPagoMovilBDV = async function (req, res) {
   const { numeroReferencia, montoOperacion, nacionalidadDestino, cedulaDestino, telefonoDestino, bancoDestino, moneda, conceptoPago } = req.body;
-  // URL del servicio para ambiente de calidad [cite: 73]
+  // URL del servicio 
   const url = 'https://bdvconciliacionqa.banvenez.com:444/api/consulta/consultaMultiple/v2';
 
-  // Configuración de Headers según el manual técnico [cite: 75]
+  // Configuración de Headers 
   const headers = {
-    'X-API-Key': process.env.BDVFBSJ, // API Key exclusiva de QA [cite: 75]
-    'Content-Type': 'application/json' // Formato de entrada JSON [cite: 75]
+    'X-API-Key': process.env.BDVFBSJ, 
+    'Content-Type': 'application/json' 
   };
 
   // Cuerpo de la solicitud (Objeto JavaScript directo para Axios) 
   const data = {
-    "numeroReferencia": numeroReferencia,      // Generado por el comercio [cite: 84]
-    "montoOperacion": montoOperacion,               // Importe con punto decimal [cite: 84, 113]
-    "nacionalidadDestino": nacionalidadDestino,            // Nacionalidad del receptor [cite: 84]
-    "cedulaDestino": cedulaDestino,           // Cédula del receptor [cite: 84]
-    "telefonoDestino": telefonoDestino,      // Teléfono del receptor [cite: 84]
-    "bancoDestino": bancoDestino,                // Código del banco destino [cite: 84]
-    "moneda": moneda,                        // Moneda de la operación [cite: 84]
-    "conceptoPago": conceptoPago    // Descripción del pago [cite: 84]
+    "numeroReferencia": numeroReferencia,      
+    "montoOperacion": montoOperacion,               
+    "nacionalidadDestino": nacionalidadDestino,           
+    "cedulaDestino": cedulaDestino,           
+    "telefonoDestino": telefonoDestino,      
+    "bancoDestino": bancoDestino,                
+    "moneda": moneda,                        
+    "conceptoPago": conceptoPago    
   };
-
+  console.log("Datos enviados a BDV:", data); // Log para verificar los datos antes de la solicitud
   try {
-    // Axios realiza el POST y la conversión a JSON automáticamente [cite: 72, 75]
+   
     const response = await axios.post(url, data, { headers });
-
-    // En Axios, la respuesta del servidor está en la propiedad 'data'
     const resData = response.data;  
-    
-      res.json(resData); // Enviar la respuesta completa al frontend para mostrar detalles  
+    console.log("Respuesta de BDV:", resData); // Log para verificar la respuesta completa
+      res.json(resData); 
 
   } catch (error) {
     // Manejo de errores específico de Axios
-    if (error.response) {
-      // El servidor respondió con un código fuera del rango 2xx (ej. 400 por error de validación) [cite: 123]
+    if (error.response) {       
       console.error('Error del Servidor:', error.response.data);
     } else {
       console.error('Error de Conexión:', error.message);
