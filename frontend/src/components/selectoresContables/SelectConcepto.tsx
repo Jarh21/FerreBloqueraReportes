@@ -6,7 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 
 type SelectConceptoProps = {
     value: number | null;
-    onChange: (value: number | null) => void;
+    onChange: (value: number |null) => void;
     placeholder?: string;
     className?: string;
 };

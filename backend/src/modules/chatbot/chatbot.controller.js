@@ -2,7 +2,7 @@ import {pool, ejecutarConsultaEnEmpresaPorId} from "../../config/database.js"
 import { GoogleGenAI } from "@google/genai";
 
 export const obtenerRespuestaChatbot = async (req, res) => {
-    //const genAI = new GoogleGenAI("AIzaSyCnhaQd5Qa4JASowJk2J1ZscAit6inbcrc");
+    
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     const { empresaId, pregunta } = req.body;
 
@@ -36,7 +36,19 @@ export const obtenerRespuestaChatbot = async (req, res) => {
 
     // 1. Definimos el esquema de tus tablas (esto es lo que la IA necesita saber)
     const dbSchema = `
-        Tabla: usuarios (id, nombre, email, estado)
+        Tabla: facturas (keycodigo,documento, fecha, nomclie, rif,gravado, exento, total, fiscalcomp,usuario)
+        Tabla: facturas_dat(keycodigo,documento,fecha,codprod,nombre,cantidad,costo,precio,total,totalmasiva,almacen,equipo)
+        clave foranea: facturas_dat.documento -> facturas.documento
+        alias: facturas as f, facturas_dat as fd
+        descripcion de campos:
+        - keycodigo: ID único de la factura
+        - documento: codigo de relacion entre facturas y facturas_dat
+        - fecha: fecha de la factura
+        - nomclie: nombre del cliente
+        - rif: rif del cliente
+        - codprod: código del producto
+        - nombre: nombre del producto
+        - totalmasiva: total mas impuestos de la linea (cantidad * precio + impuestos)
         
     `;
 
@@ -65,7 +77,7 @@ export const obtenerRespuestaChatbot = async (req, res) => {
     // 3. Ejecución segura en el Backend
     try {
         // Aquí usas tu conexión a MySQL (ejemplo con Knex)
-        const [data] = await pool.query(sqlQuery);
+        const data = await ejecutarConsultaEnEmpresaPorId(empresaId,sqlQuery);
 
         // 2. Creamos un prompt que combine la pregunta y los datos reales
         const promptRespuesta = `
@@ -73,7 +85,7 @@ export const obtenerRespuestaChatbot = async (req, res) => {
             El usuario hizo esta pregunta: "${pregunta}"
             
             Los datos reales obtenidos de la base de datos en formato JSON son:
-            ${data}
+            ${JSON.stringify(data)}
 
             Por favor, redacta una respuesta basada en esos datos.
             - Si los datos están vacíos, indica que no se encontró información.
@@ -83,6 +95,7 @@ export const obtenerRespuestaChatbot = async (req, res) => {
         console.log("Resultado de datos para la respuesta:", data);
         let resultRespuesta
         try {
+            console.log("promptRespuesta: ",promptRespuesta)
             resultRespuesta = await generateWithRetries(ai, { model: "gemini-3-flash-preview", contents: promptRespuesta }, 3, 500)
         } catch (err) {
             console.error('Error al generar respuesta final desde la API de AI:', err)

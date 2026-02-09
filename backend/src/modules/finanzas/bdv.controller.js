@@ -45,7 +45,7 @@ export const realizarPagoMovilBDV = async function (req, res) {
 
   // Configuración de Headers según el manual técnico [cite: 75]
   const headers = {
-    'X-API-Key': '256D0FDD36F1B1B3F1208A9B6EC693', // API Key exclusiva de QA [cite: 75]
+    'X-API-Key': process.env.BDVFBSJ, // API Key exclusiva de QA [cite: 75]
     'Content-Type': 'application/json' // Formato de entrada JSON [cite: 75]
   };
 
