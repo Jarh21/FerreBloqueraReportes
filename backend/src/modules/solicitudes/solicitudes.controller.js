@@ -1,4 +1,4 @@
-import { pool } from "../../config/database.js";
+import { pool,ejecutarConsultaEnEmpresaPorId } from "../../config/database.js";
 
 // ----------------------------------------------------
 // CREAR SOLICITUD (CORREGIDO: GUARDA TIPO_PAGO)
@@ -194,10 +194,25 @@ export const ObtenerSolicitudes = async (req, res) => {
             `SELECT * FROM pagos_historial WHERE solicitud_id IN (?) ORDER BY creado_en ASC`,
             [solicitudIds]
         );
+         // Obtener cuentas y conceptos para mapear los nombres posteriormente
+        const [cuentas, conceptos] = await Promise.all([
+            listarContCuentas(empresaId),
+            //listarContConceptos(empresaId)
+        ]);
+        // Crear mapas para acceso rápido a nombres por keycodigo
+        const cuentasMap = new Map(cuentas.map(item => [Number(item.keycodigo), item.nombre]));
+        //const conceptosMap = new Map(conceptos.map(item => [Number(item.keycodigo), item.nombre]));
+
+        // Agregar nombres de cuenta y concepto a cada resultado
+        const resultadosConNombres = pagos.map(row => ({
+            ...row,
+            cont_cuenta_nombre: cuentasMap.get(Number(row.banco_origen)) || null,
+            //cont_concepto_nombre: conceptosMap.get(Number(row.cont_concepto_id)) || null
+        }));
 
         // 5. Combinar: Metemos el array de 'pagos' dentro de cada 'solicitud'
         const resultado = solicitudes.map(solicitud => {
-            const susPagos = pagos.filter(p => p.solicitud_id === solicitud.id);
+            const susPagos = resultadosConNombres.filter(p => p.solicitud_id === solicitud.id);
             
             return {
                 ...solicitud,
@@ -212,6 +227,7 @@ export const ObtenerSolicitudes = async (req, res) => {
         res.status(500).json({ message: "Error al obtener solicitudes" });
     }
 };
+
 
 // ----------------------------------------------------
 // BUSCAR BENEFICIARIOS (AUTOCOMPLETE)
@@ -435,3 +451,11 @@ export const EditarSolicitud = async (req, res) => {
         connection.release();
     }
 };
+function listarContCuentas(empresaId) {
+    const sql = `SELECT keycodigo, nombre FROM cont_cuenta `;
+    return ejecutarConsultaEnEmpresaPorId(empresaId, sql);
+}
+function listarContConceptos(empresaId) {
+    const sql = `SELECT keycodigo, nombre FROM cont_concepto`;
+    return ejecutarConsultaEnEmpresaPorId(empresaId, sql);
+}
