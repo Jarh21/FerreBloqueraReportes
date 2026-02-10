@@ -19,6 +19,7 @@ const ChatBotGpt: React.FC = () => {
     const { usuario, empresaActual } = useAuth()
     const [messages, setMessages] = useState<Message[]>([])
     const [input, setInput] = useState("")
+    const [isWaiting, setIsWaiting] = useState(false)
     const listRef = useRef<HTMLDivElement | null>(null)
 
     const storageKey = `chat_history:${empresaActual?.id || 'none'}:${usuario?.id || 'anon'}`
@@ -58,6 +59,7 @@ const ChatBotGpt: React.FC = () => {
       // Añadimos el mensaje del usuario de forma optimista
       setMessages((m) => [...m, userMsg])
       setInput("")
+      setIsWaiting(true)
 
       try {
         const response = await axios.post(
@@ -116,6 +118,8 @@ const ChatBotGpt: React.FC = () => {
           ...m,
           { id: generateId(), role: 'assistant', text: 'No se pudo obtener respuesta del servidor.', createdAt: Date.now() },
         ])
+      } finally {
+        setIsWaiting(false)
       }
     }
 
@@ -134,8 +138,8 @@ const ChatBotGpt: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-extrabold text-slate-800">ChatBotGpt</h2>
-                <p className="text-sm text-slate-500 mt-1">Asistente de ayuda — historial guardado localmente</p>
+                <h2 className="text-2xl font-extrabold text-slate-800">ChatBot Juanito</h2>
+                <p className="text-sm text-slate-500 mt-1">Asistente de solo relacionado con las ventas del grupo San Juan</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -180,14 +184,16 @@ const ChatBotGpt: React.FC = () => {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-                    placeholder="Escribe tu pregunta aquí... (Enter para enviar, Shift+Enter para nueva línea)"
-                    className="flex-1 resize-none min-h-[44px] max-h-36 py-2 px-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder={isWaiting ? "Escribiendo..." : "Escribe tu pregunta aquí... (solo relacionado con ventas)"}
+                    disabled={isWaiting}
+                    className="flex-1 resize-none min-h-[44px] max-h-36 py-2 px-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400"
                   />
 
                   <div className="flex flex-col items-stretch gap-2">
                     <button
                       onClick={sendMessage}
-                      className="px-4 py-2 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition"
+                      disabled={isWaiting}
+                      className="px-4 py-2 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition disabled:bg-primary-300"
                     >
                       Enviar
                     </button>

@@ -1,8 +1,15 @@
 import axios from "axios";
+import https from "https";
 import dotenv from "dotenv"
 dotenv.config();
+//const https = require('https');
+// Crear un agente que ignora la validación del certificado solo para desarrollo en ambientes de calidad
+const httpsAgent = new https.Agent({  
+  rejectUnauthorized: false
+});
 
 export const consultarSaldoBDV = async function (req, res) {
+
   const { empresaId } = req.params;
   // Configuración de la URL para Ambiente de Calidad 
   const URL = 'https://bdvconciliacionqa.banvenez.com:444/account/balances/v2';
@@ -20,7 +27,7 @@ export const consultarSaldoBDV = async function (req, res) {
   };
 
   try {   
-    const response = await axios.post(URL, data, { headers });
+    const response = await axios.post(URL, data, { headers, httpsAgent });
     // Procesamiento de la respuesta 
     const resultado = response.data;    
     if (resultado.code === 1000) { // Código 1000 indica éxito      
@@ -63,7 +70,7 @@ export const realizarPagoMovilBDV = async function (req, res) {
   console.log("Datos enviados a BDV:", data); // Log para verificar los datos antes de la solicitud
   try {
    
-    const response = await axios.post(url, data, { headers });
+    const response = await axios.post(url, data, { headers, httpsAgent });
     const resData = response.data;  
     console.log("Respuesta de BDV:", resData); // Log para verificar la respuesta completa
       res.json(resData); 
