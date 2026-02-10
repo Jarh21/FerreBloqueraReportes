@@ -95,7 +95,7 @@ const GestionPagos: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleProcesarPago = async (idSolicitud: number, datosPago: any) => {
+ const handleProcesarPago = async (idSolicitud: number, datosPago: any) => {
       try {
           setLoading(true); 
           const formData = new FormData();
@@ -104,6 +104,13 @@ const GestionPagos: React.FC = () => {
           formData.append('referencia', datosPago.referencia);
           formData.append('monto_pagado', datosPago.monto_pagado); 
           formData.append('es_abono', datosPago.es_abono ? 'true' : 'false');
+
+          // --- 🚨 AQUI ESTÁ LA CORRECCIÓN: AGREGAR TASA AL FORM DATA ---
+          // Verificamos que exista para no mandar "undefined"
+          if (datosPago.tasa_cambio) {
+              formData.append('tasa_cambio', datosPago.tasa_cambio.toString());
+          }
+          // -------------------------------------------------------------
 
           if (datosPago.comprobante) {
               formData.append('comprobante', datosPago.comprobante);

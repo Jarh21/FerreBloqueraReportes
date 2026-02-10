@@ -91,12 +91,12 @@ export const CrearSolicitud = async (req, res) => {
         const querySolicitud = `
             INSERT INTO detalles_solicitudes 
             (
-                solicitante, empresa_id, concepto, concepto_contable, /* <--- 2. AGREGAMOS COLUMNA */
+                solicitante, empresa_id, concepto, concepto_contable, 
                 beneficiario_nombre, beneficiario_rif, beneficiario_banco, beneficiario_identificador, tipo_pago,
                 monto, moneda_pago, tasa_cambio, pago_efectivo, referencia_pago, banco_origen, estado_pago,
                 referencia_usd
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) /* <--- Aumentamos un placeholder */
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
         `;
 
         const [resultSolicitud] = await connection.query(querySolicitud, [
@@ -158,22 +158,34 @@ export const CrearSolicitud = async (req, res) => {
 export const ObtenerSolicitudes = async (req, res) => {
     try {
         const { empresaId } = req.params;
-        // 1. Recibimos las fechas por Query Params (ej: ?fechaDesde=2023-10-01&fechaHasta=2023-10-31)
+        // 1. Recibimos las fechas por Query Params
         const { fechaDesde, fechaHasta } = req.query; 
         
-        // --- CONSTRUCCIÓN DINÁMICA DE LA CONSULTA ---
-        let sql = "SELECT * FROM detalles_solicitudes WHERE empresa_id = ?";
+        // --- CONSTRUCCIÓN DINÁMICA DE LA CONSULTA CON SUBCONSULTA USD ---
+        // Usamos el alias 'ds' para la tabla detalles_solicitudes
+        let sql = `
+            SELECT ds.*, 
+            (
+                SELECT COALESCE(SUM(ph.monto_equivalente_usd), 0) 
+                FROM pagos_historial ph 
+                WHERE ph.solicitud_id = ds.id
+            ) as pagado_usd_historico
+            FROM detalles_solicitudes ds 
+            WHERE ds.empresa_id = ?
+        `;
+        
         let params = [empresaId];
 
         // Si existen ambas fechas, aplicamos el filtro de rango
         if (fechaDesde && fechaHasta) {
-            sql += " AND creado_en BETWEEN ? AND ?";
+            // Usamos 'ds.creado_en' para ser específicos por el alias
+            sql += " AND ds.creado_en BETWEEN ? AND ?";
             params.push(`${fechaDesde} 00:00:00`); // Inicio del día
             params.push(`${fechaHasta} 23:59:59`); // Final del día
         }
 
         // Agregamos el ordenamiento al final
-        sql += " ORDER BY creado_en DESC";
+        sql += " ORDER BY ds.creado_en DESC";
 
         // 2. Ejecutamos la consulta con los parámetros dinámicos
         const [solicitudes] = await pool.query(sql, params);
@@ -185,11 +197,10 @@ export const ObtenerSolicitudes = async (req, res) => {
 
         // --- A PARTIR DE AQUÍ TU LÓGICA DE PAGOS SE MANTIENE IGUAL ---
 
-        // 3. Extraer los IDs para buscar sus pagos
+        // 3. Extraer los IDs para buscar sus pagos detallados
         const solicitudIds = solicitudes.map(s => s.id);
 
         // 4. Buscar el HISTORIAL COMPLETO de pagos para estas solicitudes
-        // Nota: Al usar solicitudIds filtrados, esta consulta también es más eficiente
         const [pagos] = await pool.query(
             `SELECT * FROM pagos_historial WHERE solicitud_id IN (?) ORDER BY creado_en ASC`,
             [solicitudIds]
@@ -255,7 +266,6 @@ export const BuscarBeneficiarios = async (req, res) => {
 
 // Asegúrate de importar 'fs' y 'path' si necesitas borrar imágenes en caso de error (opcional)
 // import fs from 'fs'; 
-
 // ----------------------------------------------------
 // PROCESAR PAGO (TOTAL O PARCIAL)
 // ----------------------------------------------------
@@ -272,42 +282,56 @@ export const ProcesarPago = async (req, res) => {
             banco_origen, 
             referencia, 
             monto_pagado,
-            tasa_cambio // <--- 1. RECIBIMOS LA TASA
+            tasa_cambio 
         } = req.body;
+
+        // 1. Parseo de Tasa
+        let tasaFinal = null;
+        if (tasa_cambio && tasa_cambio !== 'null' && tasa_cambio !== '') {
+            tasaFinal = parseFloat(tasa_cambio);
+        }
 
         const comprobanteUrl = req.file ? `/uploads/comprobantes/${req.file.filename}` : null;
 
-        // 1. OBTENER INFORMACIÓN ACTUAL
+        // 2. OBTENER DATOS
         const [solicitud] = await connection.query(
             "SELECT monto, total_pagado, moneda_pago FROM detalles_solicitudes WHERE id = ?", 
             [id_solicitud]
         );
 
-        if (solicitud.length === 0) {
-            throw new Error("Solicitud no encontrada");
-        }
+        if (solicitud.length === 0) throw new Error("Solicitud no encontrada");
 
         const datosSolicitud = solicitud[0]; 
         const montoTotal = parseFloat(datosSolicitud.monto);
         const pagadoPrevio = parseFloat(datosSolicitud.total_pagado || 0);
         const pagoActual = parseFloat(monto_pagado);
 
-        // 2. CALCULAR NUEVO ESTADO
-        const nuevoTotalPagado = pagadoPrevio + pagoActual;
-        
-        let nuevoEstado = 0;
-        if (nuevoTotalPagado >= (montoTotal - 0.01)) { 
-            nuevoEstado = 1; 
-        } else {
-            nuevoEstado = 3; 
-        }
+        // --- 3. NUEVO CÁLCULO DE EQUIVALENCIA USD ---
+        let equivalenteUsd = 0;
 
-        // 3. INSERTAR EN EL HISTORIAL
-        // Agregamos el campo 'tasa_cambio' a la query
+        if (datosSolicitud.moneda_pago === 'USD') {
+            // Si pagan en Dólares, la equivalencia es el mismo monto
+            equivalenteUsd = pagoActual;
+        } else {
+            // Si pagan en Bolívares (VES), dividimos entre la tasa recibida
+            // (Protegemos contra división por cero)
+            if (tasaFinal && tasaFinal > 0) {
+                equivalenteUsd = pagoActual / tasaFinal;
+            } else {
+                equivalenteUsd = 0; // O lanzar error si es obligatorio
+            }
+        }
+        // ---------------------------------------------
+
+        // 4. CALCULAR NUEVO ESTADO (En moneda original)
+        const nuevoTotalPagado = pagadoPrevio + pagoActual;
+        let nuevoEstado = (nuevoTotalPagado >= (montoTotal - 0.01)) ? 1 : 3;
+
+        // 5. INSERTAR EN HISTORIAL (CON EL CAMPO NUEVO)
         await connection.query(`
             INSERT INTO pagos_historial 
-            (solicitud_id, monto_pagado, moneda, banco_origen, referencia, comprobante_url, creado_por, tasa_cambio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (solicitud_id, monto_pagado, moneda, banco_origen, referencia, comprobante_url, creado_por, tasa_cambio, monto_equivalente_usd)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             id_solicitud, 
             pagoActual, 
@@ -316,18 +340,14 @@ export const ProcesarPago = async (req, res) => {
             referencia, 
             comprobanteUrl,
             usuarioResponsable,
-            tasa_cambio || null // <--- 2. INSERTAMOS EL VALOR (o null si no aplica)
+            tasaFinal,
+            equivalenteUsd // <--- AQUI SE GUARDA EL CÁLCULO
         ]);
 
-        // 4. ACTUALIZAR LA SOLICITUD PRINCIPAL
+        // 6. ACTUALIZAR SOLICITUD
         await connection.query(`
             UPDATE detalles_solicitudes 
-            SET 
-                total_pagado = ?,
-                estado_pago = ?,
-                comprobante_url = ?,  
-                banco_origen = ?,    
-                referencia_pago = ?  
+            SET total_pagado = ?, estado_pago = ?, comprobante_url = ?, banco_origen = ?, referencia_pago = ?  
             WHERE id = ?
         `, [nuevoTotalPagado, nuevoEstado, comprobanteUrl, banco_origen, referencia, id_solicitud]);
 
@@ -335,18 +355,17 @@ export const ProcesarPago = async (req, res) => {
         
         res.status(200).json({ 
             success: true, 
-            message: nuevoEstado === 1 ? "Pago completado exitosamente." : "Abono registrado correctamente." 
+            message: nuevoEstado === 1 ? "Pago completado." : "Abono registrado." 
         });
 
     } catch (error) {
         await connection.rollback();
         console.error("Error al procesar pago:", error);
-        res.status(500).json({ message: "Error interno al procesar el pago", error: error.message });
+        res.status(500).json({ message: "Error interno", error: error.message });
     } finally {
         connection.release();
     }
 };
-
 // solicitudes.controller.js
 
 export const AnularSolicitud = async (req, res) => {

@@ -154,6 +154,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                                 <th className="px-4 py-2 border-b">Fecha</th>
                                                 <th className="px-4 py-2 border-b">Banco Origen</th>
                                                 <th className="px-4 py-2 border-b">Referencia</th>
+                                                <th className="px-4 py-2 border-b">Tasa de pago</th>
                                                 <th className="px-4 py-2 border-b text-right">Monto</th>
                                                 <th className="px-4 py-2 border-b text-center">Comprobante</th>
                                             </tr>
@@ -172,6 +173,9 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                                         </td>
                                                         <td className="px-4 py-2 text-slate-600 font-mono text-xs">
                                                             {pago.referencia || pago.referencia_pago || '-'}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-slate-600 font-mono text-xs">
+                                                            {pago.tasa_cambio || pago.referencia_pago || '-'}
                                                         </td>
                                                         <td className="px-4 py-2 text-right font-bold text-green-700 text-xs">
                                                             {formatMonto(pago.monto_pagado, solicitud.moneda_pago)}
