@@ -345,10 +345,12 @@ export const obtenerFletesCancelados = async (req, res) => {
         if (!empresaId) {
             return res.status(400).json({ error: "Faltan parámetros: empresaId" });
         }
+        // Obtener cuentas y conceptos para mapear los nombres posteriormente
         const [cuentas, conceptos] = await Promise.all([
             listarContCuentas(empresaId),
             listarContConceptos(empresaId)
         ]);
+        // Crear mapas para acceso rápido a nombres por keycodigo
         const cuentasMap = new Map(cuentas.map(item => [Number(item.keycodigo), item.nombre]));
         const conceptosMap = new Map(conceptos.map(item => [Number(item.keycodigo), item.nombre]));
         const vehiculoIds = (Array.isArray(vehiculos) ? vehiculos : (vehiculo != null ? [vehiculo] : []))
@@ -369,6 +371,7 @@ export const obtenerFletesCancelados = async (req, res) => {
                     ) AS vehiculo, f.fecha_cancelado,cont_cuenta_id,cont_concepto_id,monto,monto_moneda from logistica_fletes_cancelados f, logistica_vehiculos v where f.empresa_id =? and f.vehiculo_id = v.id and (f.fecha_cancelado BETWEEN ? AND ?) ${whereClause} ORDER BY f.fecha_cancelado DESC
                 `;
         const [resultados] = await pool.query(sql, [empresaId, fechaDesde, fechaHasta , ...vehiculoIds]);
+        // Agregar nombres de cuenta y concepto a cada resultado
         const resultadosConNombres = resultados.map(row => ({
             ...row,
             cont_cuenta_nombre: cuentasMap.get(Number(row.cont_cuenta_id)) || null,
