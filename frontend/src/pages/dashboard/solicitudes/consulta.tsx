@@ -267,10 +267,13 @@ const ConsultaPagos: React.FC = () => {
                 <div className="md:col-span-2">
                     <label className={labelFilterClass}>Banco de Origen (Cuenta)</label>
                     <SelectCuenta 
-                    value={filtros.bancoOrigen ? Number(filtros.bancoOrigen) : null} 
-                    onChange={(val) => handleCuentaChange(val)} 
-                    className="text-xs w-full" 
-                />
+    value={filtros.bancoOrigen ? Number(filtros.bancoOrigen) : null} 
+    onChange={(val) => {
+        console.log("Valor seleccionado en SelectCuenta:", val); // 👈 Agregado aquí
+        console.log("Tipo de dato:", typeof val); // Útil para ver si es string o number
+        handleCuentaChange(val);
+    }} 
+    className="text-xs w-full" />
                 </div>
             </div>
         </div>

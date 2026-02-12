@@ -17,6 +17,7 @@ const app = express()
 
 // 2. CREAMOS EL SERVIDOR HTTP Y ATAMOS SOCKET.IO
 const httpServer = createServer(app); 
+import './services/whatsappService.js';
 
 const allowedOrigins = [  
   process.env.FRONTEND_URL+':'+process.env.FRONTEND_PORT, // Asegúrate que env tenga http://

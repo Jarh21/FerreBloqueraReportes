@@ -6,6 +6,7 @@ import InputBeneficiarioAutocomplete from '../SelectSolicitudes/InputBeneficiari
 import { toast } from 'sonner';
 import { buildApiUrl } from '../../../config/api';
 import SelectorContable from '../SelectSolicitudes/SelectorContable'; 
+import ModalEditarBeneficiario from './ModalEditarBeneficiario'; // Ajusta la ruta si es necesario
 
 const TIPOS_PAGO = {
   BINANCE: "BINANCE",
@@ -34,10 +35,14 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
 }) => {
   const {usuario} = useAuth();
   
+  // --- ESTADOS ---
   const [loading, setLoading] = useState(false);
   const [modoBeneficiario, setModoBeneficiario] = useState<'nuevo' | 'registrado' | 'solo_registro'>('nuevo');
   const [guardarBeneficiario, setGuardarBeneficiario] = useState(false);
   const [agregarAExistente, setAgregarAExistente] = useState(false);
+  
+  // Estado para la Modal de Edición (NUEVO)
+  const [isEditarBeneficiarioOpen, setIsEditarBeneficiarioOpen] = useState(false);
 
   const [moneda, setMoneda] = useState<'USD' | 'VES'>('USD');
   const [origenTasa, setOrigenTasa] = useState<'BCV' | 'EURO' | 'MANUAL'>('BCV');
@@ -105,21 +110,18 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
   useEffect(() => {
       if (!formData.tipo_pago) return;
 
-      // Si es Zelle o Binance -> Forzar USD
       if ([TIPOS_PAGO.ZELLE, TIPOS_PAGO.BINANCE].includes(formData.tipo_pago)) {
           if (moneda !== 'USD') {
               setMoneda('USD');
               toast.info("Moneda ajustada", { description: "Para este método el pago debe ser en Dólares." });
           }
       }
-      // Si es Pago Móvil o Transferencia -> Forzar VES
       else if ([TIPOS_PAGO.PAGO_MOVIL, TIPOS_PAGO.TRANSFERENCIA].includes(formData.tipo_pago)) {
           if (moneda !== 'VES') {
               setMoneda('VES');
               toast.info("Moneda ajustada", { description: "Para este método el pago debe ser en Bolívares." });
           }
       }
-      // Efectivo se deja libre
   }, [formData.tipo_pago]);
 
   // Efecto de Tasa
@@ -469,10 +471,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
      }
   };
 
-  // --- VARIABLES PARA BLOQUEO DE BOTONES ---
-  // Si es Zelle/Binance -> Solo USD permitido (VES bloqueado)
   const soloDolares = [TIPOS_PAGO.ZELLE, TIPOS_PAGO.BINANCE].includes(formData.tipo_pago);
-  // Si es Pago Movil/Transf -> Solo VES permitido (USD bloqueado)
   const soloBolivares = [TIPOS_PAGO.PAGO_MOVIL, TIPOS_PAGO.TRANSFERENCIA].includes(formData.tipo_pago);
 
   return (
@@ -490,7 +489,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {/* ... (Slider y Campos Comunes igual que antes) ... */}
             <div className="md:col-span-3 flex justify-center mb-4">
                 <div className={`bg-slate-100 p-0.5 rounded-lg inline-flex shadow-inner ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
                     <button type="button" onClick={() => setModoBeneficiario('nuevo')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${modoBeneficiario === 'nuevo' ? 'bg-white text-red-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>+ Nuevo Pago</button>
@@ -531,6 +529,20 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                             <h4 className="text-sm font-bold text-slate-700">
                                 {modoBeneficiario === 'solo_registro' ? 'Datos para el Directorio' : 'Datos del Nuevo Beneficiario'}
                             </h4>
+                            
+                            {/* --- AQUÍ ESTÁ EL NUEVO BOTÓN DE EDICIÓN (SOLO EN MODO REGISTRO) --- */}
+                            {/* {modoBeneficiario === 'solo_registro' && (
+                                <button 
+                                    type="button" 
+                                    onClick={() => setIsEditarBeneficiarioOpen(true)}
+                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded-full transition-colors border border-blue-100 mr-2"
+                                >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    Editar Beneficiario
+                                </button>
+                            )} */}
+                            {/* ------------------------------------------------------------------- */}
+
                             {modoBeneficiario === 'solo_registro' && (
                                 <label className="flex items-center cursor-pointer select-none mr-2">
                                     <div className="relative">
@@ -552,6 +564,7 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                 </label>
                             )}
                         </div>
+                        
                         {modoBeneficiario === 'solo_registro' && agregarAExistente && (
                             <div className="mb-4 animate-fade-in-down">
                                 <InputBeneficiarioAutocomplete onSelect={handleBeneficiarioSeleccionado} disabled={loading} className="w-full border-2 border-blue-100 rounded-lg" />
@@ -566,18 +579,15 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 )}
             </div>
 
-            {/* SECCIÓN FINANCIERA (CON BLOQUEO DE BOTONES) */}
             {modoBeneficiario !== 'solo_registro' && (
                 <div className="md:col-span-3 border-t border-slate-100 mt-0.5 pt-1">
+                    {/* ... (Sección financiera se mantiene igual) ... */}
                     <div className="flex justify-between items-end mb-0.5">
                         <h4 className="text-sm font-bold text-slate-700">Detalles Financieros</h4>
                         <div className="flex space-x-1 bg-slate-100 p-1 rounded-md">
                             {(['Bolivares', 'Dolar'] as const).map((m) => {
                                  const code = m === 'Bolivares' ? 'VES' : 'USD';
-                                 
-                                 // Lógica de deshabilitado
                                  const isDisabled = (code === 'VES' && soloDolares) || (code === 'USD' && soloBolivares);
-
                                  return (
                                     <button 
                                         key={code} 
@@ -643,7 +653,6 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                 </div>
             )}
 
-            {/* Footer y Botones */}
             <div className="md:col-span-3 flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
                 <div>
                     {(modoBeneficiario === 'nuevo' || modoBeneficiario === 'registrado') && (
@@ -667,6 +676,13 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
             </div>
         </form>
       </div>
+
+      {/* RENDERIZADO DE LA MODAL NUEVA */}
+      <ModalEditarBeneficiario 
+        isOpen={isEditarBeneficiarioOpen} 
+        onClose={() => setIsEditarBeneficiarioOpen(false)} 
+      />
+
     </div>
   );
 };

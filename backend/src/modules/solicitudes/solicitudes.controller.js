@@ -1,4 +1,5 @@
 import { pool,ejecutarConsultaEnEmpresaPorId } from "../../config/database.js";
+import { enviarMensaje } from '../../services/whatsappService.js';
 
 // ----------------------------------------------------
 // CREAR SOLICITUD (CORREGIDO: GUARDA TIPO_PAGO)
@@ -151,6 +152,8 @@ export const CrearSolicitud = async (req, res) => {
     } finally {
         connection.release();
     }
+
+    
 };
 // ----------------------------------------------------
 // OBTENER LISTADO (GET)
@@ -285,6 +288,8 @@ export const BuscarBeneficiarios = async (req, res) => {
 // ----------------------------------------------------
 // PROCESAR PAGO (TOTAL O PARCIAL)
 // ----------------------------------------------------
+
+
 export const ProcesarPago = async (req, res) => {
     const connection = await pool.getConnection();
     
@@ -301,7 +306,23 @@ export const ProcesarPago = async (req, res) => {
             tasa_cambio 
         } = req.body;
 
-        // 1. Parseo de Tasa
+        // 1. VALIDACIÓN BÁSICA DE DATOS
+        if (!referencia || !banco_origen) {
+            throw new Error("Faltan datos bancarios obligatorios.");
+        }
+
+        // 2. SEGURIDAD: VERIFICAR DUPLICADOS
+        const [duplicado] = await connection.query(
+            "SELECT id, creado_en FROM pagos_historial WHERE referencia = ? AND banco_origen = ?", 
+            [referencia, banco_origen]
+        );
+
+        if (duplicado.length > 0) {
+            const fechaRegistro = new Date(duplicado[0].creado_en).toLocaleDateString();
+            throw new Error(`⛔ La referencia ${referencia} ya fue registrada anteriormente (Fecha: ${fechaRegistro}). Verifique si es un pago duplicado.`);
+        }
+
+        // 3. PARSEO DE TASA
         let tasaFinal = null;
         if (tasa_cambio && tasa_cambio !== 'null' && tasa_cambio !== '') {
             tasaFinal = parseFloat(tasa_cambio);
@@ -309,9 +330,9 @@ export const ProcesarPago = async (req, res) => {
 
         const comprobanteUrl = req.file ? `/uploads/comprobantes/${req.file.filename}` : null;
 
-        // 2. OBTENER DATOS
+        // 4. OBTENER INFORMACIÓN DE LA SOLICITUD
         const [solicitud] = await connection.query(
-            "SELECT monto, total_pagado, moneda_pago FROM detalles_solicitudes WHERE id = ?", 
+            "SELECT monto, total_pagado, moneda_pago, beneficiario_nombre, beneficiario_identificador,beneficiario_banco FROM detalles_solicitudes WHERE id = ?", 
             [id_solicitud]
         );
 
@@ -322,28 +343,23 @@ export const ProcesarPago = async (req, res) => {
         const pagadoPrevio = parseFloat(datosSolicitud.total_pagado || 0);
         const pagoActual = parseFloat(monto_pagado);
 
-        // --- 3. NUEVO CÁLCULO DE EQUIVALENCIA USD ---
+        // 5. CÁLCULO DE EQUIVALENCIA EN DÓLARES (Para Dashboard)
         let equivalenteUsd = 0;
-
         if (datosSolicitud.moneda_pago === 'USD') {
-            // Si pagan en Dólares, la equivalencia es el mismo monto
             equivalenteUsd = pagoActual;
         } else {
-            // Si pagan en Bolívares (VES), dividimos entre la tasa recibida
-            // (Protegemos contra división por cero)
             if (tasaFinal && tasaFinal > 0) {
                 equivalenteUsd = pagoActual / tasaFinal;
             } else {
-                equivalenteUsd = 0; // O lanzar error si es obligatorio
+                equivalenteUsd = 0; 
             }
         }
-        // ---------------------------------------------
 
-        // 4. CALCULAR NUEVO ESTADO (En moneda original)
+        // 6. CALCULAR NUEVO ESTADO DE LA DEUDA
         const nuevoTotalPagado = pagadoPrevio + pagoActual;
         let nuevoEstado = (nuevoTotalPagado >= (montoTotal - 0.01)) ? 1 : 3;
 
-        // 5. INSERTAR EN HISTORIAL (CON EL CAMPO NUEVO)
+        // 7. INSERTAR EN HISTORIAL (CON SEGURIDAD + METADATA FINANCIERA)
         await connection.query(`
             INSERT INTO pagos_historial 
             (solicitud_id, monto_pagado, moneda, banco_origen, referencia, comprobante_url, creado_por, tasa_cambio, monto_equivalente_usd)
@@ -357,10 +373,10 @@ export const ProcesarPago = async (req, res) => {
             comprobanteUrl,
             usuarioResponsable,
             tasaFinal,
-            equivalenteUsd // <--- AQUI SE GUARDA EL CÁLCULO
+            equivalenteUsd 
         ]);
 
-        // 6. ACTUALIZAR SOLICITUD
+        // 8. ACTUALIZAR LA SOLICITUD PRINCIPAL
         await connection.query(`
             UPDATE detalles_solicitudes 
             SET total_pagado = ?, estado_pago = ?, comprobante_url = ?, banco_origen = ?, referencia_pago = ?  
@@ -368,16 +384,50 @@ export const ProcesarPago = async (req, res) => {
         `, [nuevoTotalPagado, nuevoEstado, comprobanteUrl, banco_origen, referencia, id_solicitud]);
 
         await connection.commit();
+
+        // =================================================================
+        // 🤖 NOTIFICACIÓN WHATSAPP (Post-Commit)
+        // =================================================================
+        // Se ejecuta de forma asíncrona para no bloquear la respuesta al usuario
+        (async () => {
+            try {
+                const emojiEstado = nuevoEstado === 1 ? '✅' : '💰';
+                const textoEstado = nuevoEstado === 1 ? 'PAGO COMPLETADO' : 'ABONO RECIBIDO';
+                
+                const mensaje = `*FerreBloquera Reportes: Notificación de Pago* 🧱\n\n` +
+                                `${emojiEstado} *ESTATUS:* ${textoEstado}\n` +
+                                `📄 *Solicitud:* #${id_solicitud}\n` +
+                                `👤 *Beneficiario:* ${datosSolicitud.beneficiario_nombre}\n` +
+                                `💸 *Monto:* ${pagoActual.toFixed(2)} ${datosSolicitud.moneda_pago}\n` +
+                                `💸 *Estimado USD:* ${equivalenteUsd.toFixed(2)} USD\n` +
+                                `🏦 *Banco:* ${datosSolicitud.beneficiario_banco}\n` +
+                                `🔢 *Ref:* ${referencia}\n` +
+                                (tasaFinal ? `📈 *Tasa:* ${tasaFinal}\n` : '') +
+                                `\n_Este es un mensaje automático._`;
+
+                // Aquí usamos el identificador del beneficiario (asumiendo que es el teléfono móvil)
+                // OJO: Asegúrate de que 'beneficiario_identificador' tenga un número válido.
+                const telefonoDestino = datosSolicitud.beneficiario_identificador; 
+
+                if (telefonoDestino) {
+                    await enviarMensaje(telefonoDestino, mensaje);
+                }
+            } catch (wsError) {
+                console.error("⚠️ Alerta WhatsApp no enviada:", wsError);
+                // No lanzamos error para no afectar la transacción exitosa
+            }
+        })();
+        // =================================================================
         
         res.status(200).json({ 
             success: true, 
-            message: nuevoEstado === 1 ? "Pago completado." : "Abono registrado." 
+            message: nuevoEstado === 1 ? "Pago completado exitosamente." : "Abono registrado correctamente." 
         });
 
     } catch (error) {
         await connection.rollback();
         console.error("Error al procesar pago:", error);
-        res.status(500).json({ message: "Error interno", error: error.message });
+        res.status(500).json({ message: "Error interno al procesar el pago", error: error.message });
     } finally {
         connection.release();
     }
@@ -478,3 +528,71 @@ function listarContConceptos(empresaId) {
     const sql = `SELECT keycodigo, nombre FROM cont_concepto`;
     return ejecutarConsultaEnEmpresaPorId(empresaId, sql);
 }
+
+
+
+
+//editar beneficiario (tanto datos personales como bancarios)
+export const EditarBeneficiario = async (req, res) => {
+    const connection = await pool.getConnection(); // Usamos transacción por seguridad
+    
+    try {
+        await connection.beginTransaction();
+
+        const { id } = req.params; // Este es el ID de la cuenta (tabla beneficiarios_cuentas)
+        const { 
+            nombre, 
+            rif, 
+            banco, 
+            tipo_pago, 
+            telefono, 
+            cuenta, 
+            email 
+        } = req.body;
+
+        // 1. Calcular el identificador nuevo
+        let identificador = '';
+        if (tipo_pago === 'PAGO MOVIL') identificador = telefono;
+        else if (tipo_pago === 'TRANSFERENCIA') identificador = cuenta;
+        else if (['ZELLE', 'BINANCE'].includes(tipo_pago)) identificador = email;
+
+        // 2. Averiguar el ID del Padre (beneficiario_id)
+        // Buscamos a qué persona pertenece esta cuenta que estamos editando
+        const [datosCuenta] = await connection.query(
+            "SELECT beneficiario_id FROM beneficiarios_cuentas WHERE id = ?", 
+            [id]
+        );
+
+        if (datosCuenta.length === 0) {
+            throw new Error("No se encontró el registro de la cuenta bancaria.");
+        }
+
+        const beneficiarioId = datosCuenta[0].beneficiario_id;
+
+        // 3. Actualizar la Tabla Padre (Datos Personales)
+        // OJO: Esto cambiará el Nombre/RIF para TODAS las cuentas de esta persona
+        await connection.query(`
+            UPDATE beneficiarios 
+            SET nombre = ?, rif = ? 
+            WHERE id = ?
+        `, [nombre, rif, beneficiarioId]);
+
+        // 4. Actualizar la Tabla Hija (Datos Bancarios)
+        // Esto solo afecta a la cuenta específica que seleccionaste
+        await connection.query(`
+            UPDATE beneficiarios_cuentas 
+            SET banco = ?, tipo_pago = ?, identificador = ?
+            WHERE id = ?
+        `, [banco, tipo_pago, identificador, id]);
+
+        await connection.commit();
+        res.json({ success: true, message: "Datos actualizados correctamente en ambas tablas." });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error("Error al editar beneficiario:", error);
+        res.status(500).json({ message: "Error interno al actualizar datos", error: error.message });
+    } finally {
+        connection.release();
+    }
+};

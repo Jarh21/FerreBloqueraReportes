@@ -94,13 +94,21 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                             {/* Columna Derecha: Finanzas */}
                             <div className="space-y-3">
                                 <div className={sectionTitleClass}>
+                                    
                                     <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200">ESTADO DE CUENTA</span>
-                                    <div className="h-px bg-green-200 flex-1"></div>
+                                    <div className="h-px bg-green-200 flex-1">
+                                        
+                                    </div>
+                                    
                                 </div>
                                 <div className="grid grid-cols-3 gap-3">
                                     <div>
                                         <label className={labelClass}>Monto Total</label>
                                         <div className="text-lg font-black text-slate-700">{formatMonto(solicitud.monto, solicitud.moneda_pago)}</div>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Ref. $</label>
+                                        <div className="text-lg font-black text-slate-700">{formatMonto(solicitud.referencia_usd || 0, 'USD')}</div>
                                     </div>
                                     <div>
                                         <label className={labelClass}>Total Pagado</label>
@@ -118,10 +126,16 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                             {formatMonto(deudaPendiente, solicitud.moneda_pago)}
                                         </div>
                                     </div>
+                                    <div>
+                                        <label className={labelClass}>Conc. Contable</label>
+                                        <div className={`text-base font-bold text-red-400`}>
+                                            {solicitud.concepto_contable}
+                                        </div>
+                                    </div>
                                     
                                     {/* Concepto Expandible */}
                                     <div>
-                                        <label className={labelClass}>Concepto</label>
+                                        <label className={labelClass}>Descripcion</label>
                                         <div 
                                             onClick={() => setExpandConcepto(!expandConcepto)}
                                             className={`text-xs text-slate-500 italic cursor-pointer transition-all duration-200 border border-transparent hover:border-slate-200 hover:bg-slate-50 rounded p-1 ${
@@ -156,6 +170,7 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                                 <th className="px-4 py-2 border-b">Referencia</th>
                                                 <th className="px-4 py-2 border-b">Tasa de pago</th>
                                                 <th className="px-4 py-2 border-b text-right">Monto</th>
+                                                <th className="px-4 py-2 border-b text-right">Eq. ($)</th>
                                                 <th className="px-4 py-2 border-b text-center">Comprobante</th>
                                             </tr>
                                         </thead>
@@ -177,8 +192,11 @@ const ModalDetalleSolicitud: React.FC<ModalDetalleSolicitudProps> = ({
                                                         <td className="px-4 py-2 text-slate-600 font-mono text-xs">
                                                             {pago.tasa_cambio || pago.referencia_pago || '-'}
                                                         </td>
-                                                        <td className="px-4 py-2 text-right font-bold text-green-700 text-xs">
+                                                        <td className="px-4 py-2 text-right font-bold text-blue-400 text-xs">
                                                             {formatMonto(pago.monto_pagado, solicitud.moneda_pago)}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-bold text-green-700 text-xs">
+                                                            {formatMonto(pago.monto_equivalente_usd, 'USD')}
                                                         </td>
                                                         <td className="px-4 py-2 text-center">
                                                             {img ? (
