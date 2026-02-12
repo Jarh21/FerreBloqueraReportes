@@ -106,7 +106,7 @@ export const me = async (req, res) => {
     }
 
     const usuario = usuarios[0]
-
+    console.log("Usuario obtenido en /me:", usuarios)
     // Obtener empresas del usuario
     const conn = await pool.getConnection()
     const [empresas] = await conn.execute(
@@ -117,15 +117,19 @@ export const me = async (req, res) => {
     )
     conn.release()
 
-    // Obtener módulos permitidos
-    const conn2 = await pool.getConnection()
-    const [modulos] = await conn2.execute(
-      `SELECT m.* FROM modulos m 
-       JOIN rol_permisos rp ON m.id = rp.modulo_id 
-       WHERE rp.role_id = ?`,
-      [usuario.role_id],
-    )
-    conn2.release()
+      // Obtener módulos permitidos
+      const conn2 = await pool.getConnection()
+      const roleIds = [...new Set(usuarios.map((item) => item.role_id))]
+      const rolePlaceholders = roleIds.map(() => "?").join(", ")
+      console.log("rolePlaceholders ",rolePlaceholders, " roleIds ", roleIds)
+      const [modulos] = await conn2.execute(
+        `SELECT m.* FROM modulos m 
+        JOIN rol_permisos rp ON m.id = rp.modulo_id 
+        WHERE rp.role_id IN (${rolePlaceholders})`,
+        roleIds,
+      )
+      console.log("Módulos obtenidos en /me:", modulos)
+      conn2.release()
 
     res.json({
       usuario,

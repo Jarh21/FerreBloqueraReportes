@@ -6,23 +6,31 @@ Sistema completo de gestión para ferretería con autenticación, roles, permiso
 
 \`\`\`
 proyecto/
-├── backend/           # API Express
+├── backend/                # API Express
 │   ├── src/
-│   │   ├── modules/   # Módulos: auth, usuarios, empresas, finanzas, reportes
+│   │   ├── modules/        # Módulos: auth, usuarios, empresas, finanzas, reportes
 │   │   ├── middleware/
 │   │   ├── config/
-│   │   └── index.js
+|   |   ├── routes/routes.js
+│   │   └── index.js   
 │   ├── .env
 │   └── package.json
-├── frontend/          # App React + Vite
+├── frontend/               # App React + Vite
+│   ├── public/image/       #imagenes publicas del frontend
 │   ├── src/
-│   │   ├── pages/     # Páginas: Login, Register, Dashboard
+│   │   ├── pages/          # Páginas: Login, Register, Dashboard
 │   │   ├── components/
-│   │   ├── context/
-│   │   └── main.tsx
+│   │   ├── config/api.ts   #generador de url hacia el backend
+│   │   ├── context/AuthContext.tsx
+│   │   ├── App.tsx
+│   │   ├── routes.tsx
+│   │   └── main.tsx        # raiz del frontend + importa App.tsx
+│   ├── vite.config.ts
+│   ├── tsconfig.json       # configuracion de typescrit
+│   ├── tailwind.config.js  #configuracion del tailwind
 │   ├── index.html
 │   └── package.json
-├── database.sql       # Schema MySQL
+├── database.sql            # Schema MySQL
 └── README.md
 \`\`\`
 

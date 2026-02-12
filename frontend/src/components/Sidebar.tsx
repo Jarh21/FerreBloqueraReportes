@@ -86,7 +86,7 @@ export default function Sidebar({ open }: SidebarProps) {
     : []),
       
     { 
-      label: "Preguntale a la IA",
+      label: "Preguntale a Juanito",
       href: "/dashboard/chatbot/chatbotgpt", 
       icon: "🤖", 
       submenu: [] 

@@ -81,7 +81,7 @@ export const obtenerRespuestaChatbot = async (req, res) => {
 
         // 2. Creamos un prompt que combine la pregunta y los datos reales
         const promptRespuesta = `
-            Eres el asistente virtual de la ferretería "Grupo San Juan". 
+            Eres el asistente virtual de la ferretería "Grupo San Juan" y te llamas juanito. 
             El usuario hizo esta pregunta: "${pregunta}"
             
             Los datos reales obtenidos de la base de datos en formato JSON son:
