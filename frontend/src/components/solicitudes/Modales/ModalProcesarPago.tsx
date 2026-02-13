@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import InputBancosAutocomplete from '../SelectSolicitudes/InputBancosAutocomplete';
 import SelectCuenta from '../../selectoresContables/SelectCuenta';
 import { toast } from 'sonner';
 import { useAuth } from '../../../context/AuthContext';
+import { leerTextoDeImagen, extraerReferencia } from '../../../services/ocrService'; // Ajusta la ruta a tu archivo
 
 interface ModalProcesarPagoProps {
     isOpen: boolean;
@@ -33,35 +33,27 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
     // 🧠 LÓGICA FINANCIERA REORDENADA (INDEXACIÓN)
     // ========================================================================
 
+    // lector de OCR
+    const [ocrLoading, setOcrLoading] = useState(false);
+
     const esDolar = solicitud?.moneda_pago === 'USD';
     const tasaCalculo = parseFloat(tasaAplicada) || 0;
 
-    // 1. CALCULAMOS PRIMERO LA DEUDA REAL EN DÓLARES (Reference - Historico USD)
     const referenciaUsdOriginal = solicitud ? parseFloat(solicitud.referencia_usd || 0) : 0;
     const pagadoUsdHistorico = solicitud ? parseFloat(solicitud.pagado_usd_historico || 0) : 0;
     const saldoUsdActual = Math.max(0, referenciaUsdOriginal - pagadoUsdHistorico);
 
-    // 2. CALCULAMOS LA DEUDA PENDIENTE EN MONEDA DE PAGO (INDEXADA)
-    // Aquí está el cambio que pediste:
     let deudaPendiente = 0;
-
     if (esDolar) {
-        // Si es USD, la deuda es directa
         deudaPendiente = saldoUsdActual;
     } else {
-        // Si es VES, la deuda es: (Dólares que debo) * (Tasa que estoy escribiendo)
-        // Si no hay tasa escrita (0), la deuda se muestra en 0 esperando input
         deudaPendiente = saldoUsdActual * tasaCalculo;
     }
 
-    // 3. CÁLCULOS DE MONTOS A PAGAR
     const montoAbonoNum = parseFloat(montoAbono) || 0;
     const montoFinal = modoPago === 'completo' ? deudaPendiente : montoAbonoNum;
-    
-    // El restante en moneda local
     const restante = Math.max(0, deudaPendiente - montoFinal);
 
-    // 4. EQUIVALENCIA DE ESTE PAGO EN USD
     let abonoEquivalenteUsd = 0;
     if (esDolar) {
         abonoEquivalenteUsd = montoFinal;
@@ -71,7 +63,6 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
         }
     }
 
-    // 5. NUEVO SALDO USD ESTIMADO
     const nuevoSaldoUsdProyectado = Math.max(0, saldoUsdActual - abonoEquivalenteUsd);
 
     // ========================================================================
@@ -101,10 +92,37 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
     const handleCambioOrigenTasa = (nuevoOrigen: 'REGISTRADA' | 'ACTUAL' | 'MANUAL') => {
         setOrigenTasa(nuevoOrigen);
         if (nuevoOrigen === 'REGISTRADA') setTasaAplicada(solicitud.tasa_cambio || '');
-        else if (nuevoOrigen === 'ACTUAL') setTasaAplicada(tasaApi.toString());
+        else if (nuevoOrigen === 'ACTUAL') setTasaAplicada(tasaApi.toFixed(2));
     };
 
-    // ... (Hooks de Paste e Imagen se mantienen igual) ...
+    // ========================================================================
+    // 🤖 FUNCIÓN OCR 
+    // ========================================================================
+    const procesarOCR = async (file: File) => {
+        setOcrLoading(true);
+        const toastId = toast.loading("🔍 Analizando comprobante (OCR)..."); 
+        
+        try {
+            const textoCrudo = await leerTextoDeImagen(file);
+            if (textoCrudo) {
+                const refEncontrada = extraerReferencia(textoCrudo);
+                if (refEncontrada) {
+                    setReferencia(refEncontrada); 
+                    toast.success(`¡Referencia capturada: ${refEncontrada}!`, { id: toastId });
+                } else {
+                    toast.warning("No se detectó número de referencia. Ingréselo manualmente.", { id: toastId });
+                }
+            } else {
+                toast.error("No se pudo leer el texto de la imagen.", { id: toastId });
+            }
+        } catch (error) {
+            toast.dismiss(toastId);
+        } finally {
+            setOcrLoading(false);
+        }
+    };
+    // ========================================================================
+
     useEffect(() => {
         const handleWindowPaste = (e: ClipboardEvent) => {
             if (!isOpen) return;
@@ -115,6 +133,9 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                     setComprobante(file);
                     setPreviewUrl(URL.createObjectURL(file));
                     toast.info("Imagen pegada desde portapapeles");
+                    
+                    // 👈 Ejecutamos OCR al pegar imagen
+                    procesarOCR(file); 
                 }
             }
         };
@@ -127,6 +148,9 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
             const file = e.target.files[0];
             setComprobante(file);
             setPreviewUrl(URL.createObjectURL(file));
+
+            // 👈 Ejecutamos OCR al subir archivo
+            procesarOCR(file); 
         }
     };
 
@@ -143,6 +167,9 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                     setPreviewUrl(URL.createObjectURL(file));
                     imagenEncontrada = true;
                     toast.success("Imagen adjuntada correctamente");
+
+                    // 👈 Ejecutamos OCR al pegar desde el botón
+                    procesarOCR(file); 
                     break; 
                 }
             }
@@ -163,7 +190,6 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
             toast.error("Monto inválido", { description: "Revise la tasa o el monto ingresado." }); 
             return; 
         }
-        // Ajustamos la validación de exceso: permitimos un pequeño margen de error flotante (0.1)
         if (modoPago === 'abono' && montoFinal > deudaPendiente + 0.1) { 
             toast.warning("Monto Excedido", { description: "El abono supera la deuda calculada." }); 
             return; 
@@ -181,7 +207,7 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
             referencia: referencia,
             comprobante: comprobante,
             monto_pagado: montoFinal,
-            es_abono: restante > 0.01, // Si queda algo debiendo, es abono
+            es_abono: restante > 0.01, 
             tasa_cambio: esDolar ? null : tasaAplicada 
         };
 
@@ -228,9 +254,7 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                         <span className="absolute right-3 top-2 text-xs font-bold text-slate-500">{esDolar ? '$' : 'Bs'}</span>
                                     </div>
                                 </div>
-                                <div className="md:col-span-1 relative"> {/* 1. Agregamos 'relative' aquí */}
-    
-                                     {/* 2. Esta es la Mini Tarjeta Flotante */}
+                                <div className="md:col-span-1 relative"> 
                                      {solicitud.tasa_cambio && (
                                     <div className="absolute top-0 right-0 transform -translate-y-1">
                                       <span className="bg-yellow-100 text-yellow-800 border border-yellow-200 text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-sm">
@@ -238,10 +262,8 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                     </span>
                                      </div>
                                      )}
-
-                                     {/* Inputs originales */}
                                     <label className={labelClass}>Ref. Original ($)</label> <input value={referenciaUsdOriginal.toFixed(2)} disabled className={inputDisabledClass} />
-                                    </div>
+                                </div>
                                 <div className="md:col-span-1">
                                     <label className={labelClass}>Deuda USD Actual</label>
                                     <div className="relative">
@@ -249,7 +271,6 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                         <span className="absolute right-3 top-2 text-xs font-bold text-red-400">$</span>
                                     </div>
                                 </div>
-                                
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 opacity-90 p-4 bg-slate-50 rounded-lg mt-2">
@@ -301,8 +322,11 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                             <input type="number" step="0.01" value={tasaAplicada} onChange={(e) => setTasaAplicada(e.target.value)} readOnly={origenTasa !== 'MANUAL'} className={`w-full p-2.5 border border-l-0 border-green-200 rounded-r-lg text-sm outline-none transition-all ${origenTasa !== 'MANUAL' ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800 focus:ring-2 focus:ring-green-600'}`} placeholder="0.00" />
                                         </div>
                                     )}
-                                    {origenTasa === 'ACTUAL' && !esDolar && (<p className="text-[9px] text-green-600 mt-1 ml-1">Tasa BCV del día: {tasaApi}</p>)}
-                                </div>
+                                    {origenTasa === 'ACTUAL' && !esDolar && tasaApi != null && (
+                                    <p className="text-[9px] text-green-600 mt-1 ml-1">
+                                        Tasa BCV del día: {tasaApi.toFixed(2).replace('.', ',')}
+                                    </p>
+                                    )}                               </div>
 
                                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-2 flex flex-col justify-center animate-pulse-slow">
                                     <div className="flex justify-between items-center mb-1">
@@ -324,8 +348,19 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                         <SelectCuenta name="banco_origen" value={bancoOrigen} onChange={setBancoOrigen} className="w-full hover:cursor-text" />
                                     </div>
                                     <div>
-                                        <label className={labelClass}>Nro. Referencia</label>
-                                        <input type="text" value={referencia} onChange={(e) => setReferencia(e.target.value)} className={inputActiveClass} placeholder="Ultimos 6 digitos" required />
+                                        {/* 👈 AQUÍ INYECTAMOS EL ESTILO VISUAL DE CARGA OCR */}
+                                        <label className={labelClass}>
+                                            Nro. Referencia
+                                            {ocrLoading && <span className="text-blue-500 ml-2 animate-pulse text-[9px] font-bold tracking-widest">LEYENDO...</span>}
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            value={referencia} 
+                                            onChange={(e) => setReferencia(e.target.value)} 
+                                            className={`${inputActiveClass} ${ocrLoading ? 'bg-blue-50 border-blue-300' : ''}`} 
+                                            placeholder="Últimos 6 dígitos" 
+                                            required 
+                                        />
                                     </div>
                                 </div>
 
@@ -339,7 +374,7 @@ const ModalProcesarPago: React.FC<ModalProcesarPagoProps> = ({
                                             {previewUrl ? (
                                                 <div className="relative">
                                                     <img src={previewUrl} alt="Vista previa" className="mx-auto h-24 object-contain rounded-md" />
-                                                    <button type="button" onClick={() => {setComprobante(null); setPreviewUrl(null);}} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs font-bold">✕</button>
+                                                    <button type="button" onClick={() => {setComprobante(null); setPreviewUrl(null); setReferencia('');}} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs font-bold">✕</button>
                                                 </div>
                                             ) : (
                                                 <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500">

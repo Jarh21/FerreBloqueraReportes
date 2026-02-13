@@ -127,7 +127,9 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
   // Efecto de Tasa
   useEffect(() => {
     let nuevaTasa = formData.tasa;
-    if (origenTasa === 'BCV') nuevaTasa = tasaBCVEnLinea || tasaBCV;
+    if (origenTasa === 'BCV') {
+  nuevaTasa = Number((tasaBCVEnLinea || tasaBCV).toFixed(2));
+}
     else if (origenTasa === 'EURO') nuevaTasa = tasaEuro;
 
     setFormData(prev => {
@@ -626,11 +628,23 @@ const ModalSolicitudPago: React.FC<ModalSolicitudPagoProps> = ({
                                         </select>
                                         <input type="number" step="0.01" name="tasa" value={formData.tasa || ''} onChange={handleFinancialChange} readOnly={origenTasa !== 'MANUAL'} className={`w-full p-2.5 border border-l-0 border-slate-200 rounded-r-lg text-sm outline-none transition-all ${origenTasa !== 'MANUAL' ? 'bg-slate-50 text-slate-500' : 'bg-white text-slate-800 focus:ring-2 focus:ring-red-700'}`} />
                                     </div>
+
                                     {origenTasa === 'BCV' && (
-                                        <div className="flex justify-between items-center mt-0.5 ml-1">
-                                            {cargandoTasa ? <span className="text-[10px] text-blue-500 animate-pulse">Obteniendo tasa oficial...</span> : <p className="text-[10px] text-slate-400">{tasaBCVEnLinea ? `✅ Tasa Oficial en línea` : `⚠️ Tasa por defecto: ${tasaBCV}`}</p>}
-                                        </div>
-                                    )}
+    <div className="flex justify-between items-center mt-0.5 ml-1">
+        {cargandoTasa ? (
+            <span className="text-[10px] text-blue-500 animate-pulse">
+                Obteniendo tasa oficial...
+            </span>
+        ) : (
+            <p className="text-[10px] text-slate-400">
+                {tasaBCVEnLinea 
+                    ? `✅ Tasa Oficial en línea: ${Number(tasaBCVEnLinea).toFixed(2).replace('.', ',')}` 
+                    : `⚠️ Tasa por defecto: ${Number(tasaBCV).toFixed(2).replace('.', ',')}`}
+            </p>
+        )}
+    </div>
+)}
+
                                 </div>
                                 <div className="space-y-1">
                                     <label className={labelClass}>Monto a Pagar (Bs)</label>
