@@ -44,7 +44,7 @@ export const extraerReferencia = (texto: string): string | null => {
     
     if (matchRef && matchRef[1]) {
         // Retornamos los últimos 6 dígitos (que es el estándar que se suele exigir)
-        return matchRef[1].slice(-6); 
+        return matchRef[1]; 
     }
 
     // 2. Plan B: Si no encontró la palabra clave, buscamos la secuencia de números más larga (mínimo 6 dígitos)
